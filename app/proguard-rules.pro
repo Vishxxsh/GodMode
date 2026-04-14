@@ -1,0 +1,2 @@
+-keep class com.godmode.app.** { *; }
+-dontwarn com.godmode.app.**
