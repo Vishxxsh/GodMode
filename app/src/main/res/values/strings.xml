@@ -1,4 +1,4 @@
 <resources>
     <string name="app_name">God Mode</string>
-    <string name="accessibility_description">Enables hardware button remapping and app redirects for God Mode.</string>
+    <string name="accessibility_description">Hardware button remapping for Moto.</string>
 </resources>
