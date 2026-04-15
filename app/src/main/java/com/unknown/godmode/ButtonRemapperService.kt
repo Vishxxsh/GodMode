@@ -1,4 +1,4 @@
-package com.merai.godmode
+package com.unknown.godmode
 
 import android.accessibilityservice.AccessibilityService
 import android.content.Intent
@@ -8,7 +8,7 @@ import android.view.accessibility.AccessibilityEvent
 class ButtonRemapperService : AccessibilityService() {
     override fun onKeyEvent(event: KeyEvent): Boolean {
         if (event.action == KeyEvent.ACTION_DOWN) {
-            // Keycode 135 is the dedicated Moto AI button
+            // Moto's dedicated AI button (Keycode 135)
             if (event.keyCode == 135 || event.keyCode == KeyEvent.KEYCODE_ASSIST) {
                 launchGemini()
                 return true

@@ -4,15 +4,15 @@ plugins {
 }
 
 android {
-    namespace 'com.merai.godmode'
+    namespace 'com.unknown.godmode'
     compileSdk 34
 
     defaultConfig {
-        applicationId "com.merai.godmode"
+        applicationId "com.unknown.godmode"
         minSdk 26
-        targetSdk 33 // Keep at 33 to bypass Android 14 sideload blocks
-        versionCode 3
-        versionName "1.2"
+        targetSdk 33 // Keeps security strict but manageable
+        versionCode 4
+        versionName "1.3"
     }
 
     signingConfigs {
