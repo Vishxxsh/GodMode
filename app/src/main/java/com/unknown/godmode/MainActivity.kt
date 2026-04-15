@@ -20,9 +20,9 @@ class MainActivity : AppCompatActivity() {
         val mainHandler = Handler(Looper.getMainLooper())
         mainHandler.post(object : Runnable {
             override fun run() {
-                val lastKey = ButtonRemapperService.lastKeyCode
-                tvStatus.text = "GOD MODE ACTIVE\n\nLast Key Pressed: $lastKey\n(If you press your side button and this number changes, we can remap it!)"
-                mainHandler.postDelayed(this, 500)
+                // This now shows the RAW STREAM of what your phone is doing
+                tvStatus.text = ButtonRemapperService.lastEvent
+                mainHandler.postDelayed(this, 200) // Fast refresh
             }
         })
 

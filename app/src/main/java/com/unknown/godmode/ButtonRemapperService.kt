@@ -4,61 +4,57 @@ import android.accessibilityservice.AccessibilityService
 import android.content.Intent
 import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
-import android.content.Context
-import android.os.Vibrator
-import android.os.VibrationEffect
+import android.util.Log
 
 class ButtonRemapperService : AccessibilityService() {
 
+    override fun onServiceConnected() {
+        Log.d("GodMode", "Service Connected and Listening")
+    }
+
+    // 1. Trigger: Physical Buttons
     override fun onKeyEvent(event: KeyEvent): Boolean {
-        if (event.action == KeyEvent.ACTION_DOWN) {
-            val keyCode = event.keyCode
-            lastKeyCode = keyCode // Send to UI for debugging
-            
-            // 135 is the common Moto Assistant key, 131 is another common one.
-            if (keyCode == 135 || keyCode == KeyEvent.KEYCODE_ASSIST || keyCode == 131) {
-                vibrate()
-                launchGemini()
-                return true // Stop the system from opening the default assistant
-            }
+        val keyCode = event.keyCode
+        val action = if (event.action == KeyEvent.ACTION_DOWN) "DOWN" else "UP"
+        updateUI("KEY: $keyCode ($action)")
+        
+        // Dynamic Rule Check (Example: Button 135 -> Gemini)
+        if (keyCode == 135 && event.action == KeyEvent.ACTION_DOWN) {
+            launchApp("com.google.android.googlequicksearchbox")
+            return true
         }
-        return super.onKeyEvent(event)
+        return false 
     }
 
-    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        // FEATURE: YouTube to Brave Redirect
-        if (event?.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
-            val pkg = event.packageName?.toString()
-            if (pkg == "com.google.android.youtube") {
-                launchBrave()
-            }
-        }
-    }
+    // 2. Trigger: App Opens / UI Changes
+    override fun onAccessibilityEvent(event: AccessibilityEvent) {
+        val pkg = event.packageName?.toString() ?: ""
+        val type = AccessibilityEvent.eventTypeToString(event.eventType)
+        
+        // Update the UI with the latest "Event Stream"
+        updateUI("APP: $pkg\nEVENT: $type")
 
-    private fun launchGemini() {
-        val intent = Intent(Intent.ACTION_VOICE_COMMAND).apply {
-            setPackage("com.google.android.googlequicksearchbox")
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-        try { startActivity(intent) } catch (e: Exception) {}
-    }
-
-    private fun launchBrave() {
-        val intent = packageManager.getLaunchIntentForPackage("com.brave.browser")
-        if (intent != null) {
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            startActivity(intent)
+        // Rule: YouTube Redirect
+        if (pkg == "com.google.android.youtube" && event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+            launchApp("com.brave.browser")
         }
     }
 
-    private fun vibrate() {
-        val vibrator = getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
-        vibrator.vibrate(VibrationEffect.createOneShot(50, VibrationEffect.DEFAULT_AMPLITUDE))
+    private fun launchApp(packageName: String) {
+        val intent = packageManager.getLaunchIntentForPackage(packageName)
+        intent?.let {
+            it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            startActivity(it)
+        }
+    }
+
+    private fun updateUI(message: String) {
+        lastEvent = message
     }
 
     override fun onInterrupt() {}
 
     companion object {
-        var lastKeyCode: Int = 0
+        var lastEvent: String = "Waiting for events..."
     }
 }
