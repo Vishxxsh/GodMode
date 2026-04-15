@@ -1,4 +1,4 @@
-package com.godmode.app
+package com.merai.godmode
 
 import android.content.Context
 import android.content.Intent
@@ -20,20 +20,17 @@ class MainActivity : AppCompatActivity() {
 
         fun runDiagnostic() {
             val am = getSystemService(Context.ACCESSIBILITY_SERVICE) as AccessibilityManager
-            val pkg = packageName // This should be com.godmode.app
-            
             val installedServices = am.getInstalledAccessibilityServiceList()
-            val isPresent = installedServices.any { it.resolveInfo.serviceInfo.packageName == pkg }
+            
+            val isPresent = installedServices.any { it.resolveInfo.serviceInfo.packageName == packageName }
 
             val report = StringBuilder()
-            report.append("Checking for: $pkg\n")
-            report.append("System Sees Service: ${if (isPresent) "✅ YES" else "❌ NO"}\n")
+            report.append("ID: $packageName\n")
+            report.append("Service Found: ${if (isPresent) "✅ YES" else "❌ NO"}\n\n")
+            report.append("ALL RECOGNIZED SERVICES:\n")
             
-            if (!isPresent) {
-                report.append("\nDEBUG: Total Accessibility Services found: ${installedServices.size}\n")
-                installedServices.take(3).forEach { 
-                    report.append("- ${it.resolveInfo.serviceInfo.packageName}\n")
-                }
+            installedServices.forEach { 
+                report.append("- ${it.resolveInfo.serviceInfo.packageName}\n")
             }
 
             tvStatus.text = report.toString()

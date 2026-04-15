@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.godmode.app">
+    package="com.merai.godmode">
 
     <application
         android:allowBackup="true"
         android:icon="@android:drawable/btn_star"
-        android:label="God Mode"
+        android:label="Merai God Mode"
         android:theme="@style/Theme.AppCompat.Light.NoActionBar">
         
         <activity
-            android:name="com.godmode.app.MainActivity"
+            android:name=".MainActivity"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -18,8 +18,8 @@
         </activity>
 
         <service
-            android:name="com.godmode.app.ButtonRemapperService"
-            android:label="God Mode Service"
+            android:name=".ButtonRemapperService"
+            android:label="Merai Button Service"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
             android:exported="true">
             <intent-filter>
@@ -29,6 +29,5 @@
                 android:name="android.view.AccessibilityService"
                 android:resource="@xml/accessibility_service_config" />
         </service>
-
     </application>
 </manifest>

@@ -4,19 +4,17 @@ plugins {
 }
 
 android {
-    namespace 'com.godmode.app'
+    namespace 'com.merai.godmode'
     compileSdk 34
 
     defaultConfig {
-        applicationId "com.godmode.app"
+        applicationId "com.merai.godmode"
         minSdk 26
-        targetSdk 33
-        versionCode 2
-        versionName "1.1"
+        targetSdk 33 // Keep at 33 to bypass Android 14 sideload blocks
+        versionCode 3
+        versionName "1.2"
     }
 
-    // This section gives your app a permanent "ID" 
-    // so you can install updates over the old version.
     signingConfigs {
         debug {
             storeFile file("debug.keystore")
@@ -27,15 +25,10 @@ android {
     }
 
     buildTypes {
-        debug {
-            signingConfig signingConfigs.debug
-        }
+        debug { signingConfig signingConfigs.debug }
         release {
-            minifyEnabled true
-            shrinkResources true
-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-            // We'll use the same key for release for now to keep it simple
-            signingConfig signingConfigs.debug 
+            signingConfig signingConfigs.debug
+            minifyEnabled false 
         }
     }
 
@@ -44,9 +37,7 @@ android {
         targetCompatibility JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = '17'
-    }
+    kotlinOptions { jvmTarget = '17' }
 }
 
 dependencies {
