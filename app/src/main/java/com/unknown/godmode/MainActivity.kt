@@ -1,13 +1,13 @@
 package com.unknown.godmode
 
-import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.provider.Settings
-import android.view.accessibility.AccessibilityManager
 import android.widget.Button
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import android.os.Handler
+import android.os.Looper
 
 class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -16,23 +16,18 @@ class MainActivity : AppCompatActivity() {
 
         val tvStatus = findViewById<TextView>(R.id.tvStatus)
         val btnEnable = findViewById<Button>(R.id.btnEnable)
-        val btnCheck = findViewById<Button>(R.id.btnCheck)
 
-        fun runDiagnostic() {
-            val am = getSystemService(Context.ACCESSIBILITY_SERVICE) as AccessibilityManager
-            val installedServices = am.getInstalledAccessibilityServiceList()
-            val isPresent = installedServices.any { it.resolveInfo.serviceInfo.packageName == packageName }
+        val mainHandler = Handler(Looper.getMainLooper())
+        mainHandler.post(object : Runnable {
+            override fun run() {
+                val lastKey = ButtonRemapperService.lastKeyCode
+                tvStatus.text = "GOD MODE ACTIVE\n\nLast Key Pressed: $lastKey\n(If you press your side button and this number changes, we can remap it!)"
+                mainHandler.postDelayed(this, 500)
+            }
+        })
 
-            val report = StringBuilder()
-            report.append("ID: $packageName\n")
-            report.append("System Sees App: ${if (isPresent) "✅ YES" else "❌ NO"}\n\n")
-            report.append("RECOGNIZED:\n")
-            installedServices.forEach { report.append("- ${it.resolveInfo.serviceInfo.packageName}\n") }
-            tvStatus.text = report.toString()
+        btnEnable.setOnClickListener {
+            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
         }
-
-        btnEnable.setOnClickListener { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
-        btnCheck.setOnClickListener { runDiagnostic() }
-        runDiagnostic()
     }
 }
