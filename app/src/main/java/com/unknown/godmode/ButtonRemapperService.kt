@@ -1,6 +1,7 @@
 package com.unknown.godmode
 
 import android.accessibilityservice.AccessibilityService
+import android.os.Bundle
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import java.io.File
@@ -8,46 +9,61 @@ import java.io.File
 class ButtonRemapperService : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
-        // Only run if the user just tapped "IGNITE"
         if (!isIgniting) return
-
         val root = rootInActiveWindow ?: return
-        
-        // 1. Look for the "Pair device with pairing code" button and CLICK IT
-        val pairButtons = root.findAccessibilityNodeInfosByText("Pair device with pairing code")
-        if (pairButtons.isNotEmpty()) {
-            pairButtons[0].performAction(AccessibilityNodeInfo.ACTION_CLICK)
+
+        // 1. If we are in Developer Options, find and click "Wireless debugging"
+        val wirelessNode = findNodeByText(root, "Wireless debugging")
+        if (wirelessNode != null) {
+            // If it's found, we click it. If not visible, we scroll.
+            if (!wirelessNode.isVisibleToUser) {
+                root.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
+            } else {
+                wirelessNode.parent?.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                wirelessNode.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+            }
             return
         }
 
-        // 2. Look for the 6-digit code in the popup
-        findPairingData(root)
+        // 2. If we are already inside Wireless Debugging, find "Pair device with pairing code"
+        val pairNode = findNodeByText(root, "Pair device with pairing code")
+        if (pairNode != null) {
+            pairNode.parent?.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+            pairNode.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+            return
+        }
+
+        // 3. Scrape the 6-digit code and the port
+        scrapeData(root)
     }
 
-    private fun findPairingData(node: AccessibilityNodeInfo) {
+    private fun findNodeByText(root: AccessibilityNodeInfo, text: String): AccessibilityNodeInfo? {
+        val nodes = root.findAccessibilityNodeInfosByText(text)
+        return nodes.firstOrNull()
+    }
+
+    private fun scrapeData(node: AccessibilityNodeInfo) {
         for (i in 0 until node.childCount) {
             val child = node.getChild(i) ?: continue
-            val text = child.text?.toString() ?: ""
+            val txt = child.text?.toString() ?: ""
             
-            // Match 6-digit code (e.g., 123456)
-            if (text.matches(Regex("\\d{6}"))) {
-                File("/data/local/tmp/p_code.txt").writeText(text)
+            // Catch 6-digit code
+            if (txt.matches(Regex("\\d{6}"))) {
+                File("/data/local/tmp/p_code.txt").writeText(txt)
             }
-            // Match port (e.g., 192.168.1.1:34567)
-            if (text.contains(":")) {
-                val port = text.substringAfterLast(":")
-                if (port.all { it.isDigit() }) {
+            // Catch port (found after the colon in the IP line)
+            if (txt.contains(":")) {
+                val port = txt.substringAfterLast(":")
+                if (port.all { it.isDigit() } && port.length >= 4) {
                     File("/data/local/tmp/p_port.txt").writeText(port)
                 }
             }
-            findPairingData(child)
+            scrapeData(child)
         }
     }
 
     override fun onInterrupt() {}
-    
     companion object {
         var isIgniting = false
-        var currentSignal = "Ready..."
     }
 }
