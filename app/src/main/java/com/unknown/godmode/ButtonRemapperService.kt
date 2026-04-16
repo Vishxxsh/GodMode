@@ -1,48 +1,67 @@
 package com.unknown.godmode
 
 import android.accessibilityservice.AccessibilityService
+import android.graphics.PixelFormat
+import android.view.*
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import android.widget.TextView
 import java.io.File
 
 class ButtonRemapperService : AccessibilityService() {
 
+    private var statusView: TextView? = null
+    private var windowManager: WindowManager? = null
+
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
-        // SAFETY: If we aren't in Settings, STOP everything.
-        if (event.packageName != "com.android.settings") {
-            if (isIgniting) {
-                isIgniting = false // Turn off the search if user leaves
-                currentSignal = "Ready..."
-            }
+        if (!isIgniting) {
+            removeOverlay()
             return
         }
 
-        if (!isIgniting) return
+        // Show the banner if we are in Settings
+        if (event.packageName == "com.android.settings") {
+            showOverlay("SEARCHING FOR: Wireless debugging")
+        } else {
+            showOverlay("WAITING: Please open Developer Options")
+            return
+        }
+
         val root = rootInActiveWindow ?: return
 
-        // 1. Look for the target text
-        val wirelessNode = findNodeByText(root, "Wireless debugging")
-        
-        if (wirelessNode != null) {
-            // Found it! But is it clickable and on-screen?
-            if (wirelessNode.isVisibleToUser) {
-                clickNode(wirelessNode)
+        // 1. CHECK FOR TARGET
+        val target = findNodeByText(root, "Wireless debugging")
+        if (target != null) {
+            if (target.isVisibleToUser) {
+                showOverlay("FOUND IT! Clicking...")
+                clickNode(target)
             } else {
-                scrollUntilVisible(root, "Wireless debugging")
+                showOverlay("FOUND (OFF-SCREEN): Scrolling down...")
+                scrollDown(root)
             }
         } else {
-            // Can't see it at all? Flick the list down.
+            showOverlay("NOT FOUND: Flicking list...")
             scrollDown(root)
         }
 
-        // 2. Once inside, look for the pairing button
-        val pairNode = findNodeByText(root, "Pair device with pairing code")
-        if (pairNode != null && pairNode.isVisibleToUser) {
-            clickNode(pairNode)
+        // 2. CHECK FOR PAIRING BUTTON
+        val pair = findNodeByText(root, "Pair device with pairing code")
+        if (pair != null && pair.isVisibleToUser) {
+            showOverlay("OPENING PAIRING POPUP...")
+            clickNode(pair)
         }
 
-        // 3. Scrape data from the popup
         scrapeData(root)
+    }
+
+    private fun scrollDown(node: AccessibilityNodeInfo) {
+        // Try to find ANY node that supports scrolling
+        if (node.actionList.contains(AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_FORWARD)) {
+            node.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
+        }
+        for (i in 0 until node.childCount) {
+            scrollDown(node.getChild(i) ?: continue)
+        }
     }
 
     private fun findNodeByText(root: AccessibilityNodeInfo, text: String): AccessibilityNodeInfo? {
@@ -50,31 +69,38 @@ class ButtonRemapperService : AccessibilityService() {
         return nodes?.firstOrNull()
     }
 
-    private fun scrollUntilVisible(root: AccessibilityNodeInfo, text: String) {
-        val nodes = root.findAccessibilityNodeInfosByText(text)
-        if (nodes.isNullOrEmpty() || !nodes[0].isVisibleToUser) {
-            scrollDown(root)
-        }
-    }
-
     private fun clickNode(node: AccessibilityNodeInfo) {
         var target = node
-        // Move up to the clickable parent row (the actual list item)
-        while (target != null && !target.isClickable) {
-            target = target.parent
-        }
+        while (target != null && !target.isClickable) { target = target.parent }
         target?.performAction(AccessibilityNodeInfo.ACTION_CLICK)
     }
 
-    private fun scrollDown(node: AccessibilityNodeInfo) {
-        // Target the specific list view instead of the whole screen
-        if (node.isScrollable) {
-            node.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
+    // --- OVERLAY LOGIC ---
+    private fun showOverlay(text: String) {
+        if (statusView == null) {
+            windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
+            statusView = TextView(this).apply {
+                setBackgroundColor(0xAA000000.toInt())
+                setTextColor(0xFFFF3D00.toInt())
+                setPadding(20, 10, 20, 10)
+                textSize = 14f
+                gravity = Gravity.CENTER
+            }
+            val params = WindowManager.LayoutParams(
+                WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+                PixelFormat.TRANSLUCENT
+            ).apply { gravity = Gravity.TOP }
+            windowManager?.addView(statusView, params)
         }
-        for (i in 0 until node.childCount) {
-            val child = node.getChild(i) ?: continue
-            scrollDown(child)
-        }
+        statusView?.text = "GODMODE DEBUG: $text"
+    }
+
+    private fun removeOverlay() {
+        statusView?.let { windowManager?.removeView(it) }
+        statusView = null
     }
 
     private fun scrapeData(node: AccessibilityNodeInfo) {
@@ -83,20 +109,12 @@ class ButtonRemapperService : AccessibilityService() {
             val txt = child.text?.toString() ?: ""
             if (txt.matches(Regex("\\d{6}"))) {
                 File("/data/local/tmp/p_code.txt").writeText(txt)
-            }
-            if (txt.contains(":")) {
-                val port = txt.substringAfterLast(":")
-                if (port.all { it.isDigit() } && port.length >= 4) {
-                    File("/data/local/tmp/p_port.txt").writeText(port)
-                }
+                showOverlay("GOT CODE: $txt")
             }
             scrapeData(child)
         }
     }
 
     override fun onInterrupt() {}
-    companion object {
-        var isIgniting = false
-        var currentSignal = "Ready..."
-    }
+    companion object { var isIgniting = false }
 }
