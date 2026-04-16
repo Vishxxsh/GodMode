@@ -13,22 +13,30 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
 
         findViewById<Button>(R.id.btnIgnite).setOnClickListener {
+            // Check Overlay Permission
             if (!Settings.canDrawOverlays(this)) {
                 val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))
                 startActivity(intent)
-                Toast.makeText(this, "Enable 'Display over other apps' first!", Toast.LENGTH_LONG).show()
                 return@setOnClickListener
             }
 
+            // Ignite the Radar
             ButtonRemapperService.isIgniting = true
             
-            // Try to jump DIRECTLY to Wireless Debugging
+            // Jump to Settings
             try {
-                val intent = Intent("android.settings.WIFI_DEBUGGING_SETTINGS")
-                startActivity(intent)
+                startActivity(Intent("android.settings.WIFI_DEBUGGING_SETTINGS"))
             } catch (e: Exception) {
                 startActivity(Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS))
             }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Reset the engine if we come back to the app manually
+        if (ButtonRemapperService.isIgniting) {
+            Toast.makeText(this, "Radar Active...", Toast.LENGTH_SHORT).show()
         }
     }
 }

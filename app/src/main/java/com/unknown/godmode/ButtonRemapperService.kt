@@ -2,6 +2,7 @@ package com.unknown.godmode
 
 import android.accessibilityservice.*
 import android.graphics.*
+import android.os.*
 import android.view.*
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
@@ -11,65 +12,72 @@ import java.io.File
 class ButtonRemapperService : AccessibilityService() {
     private var statusView: TextView? = null
     private var windowManager: WindowManager? = null
+    private val handler = Handler(Looper.getMainLooper())
 
-    override fun onAccessibilityEvent(event: AccessibilityEvent) {
-        if (!isIgniting) {
-            removeOverlay()
-            return
+    // THE RADAR: Scans every 500ms so we don't depend on "Events"
+    private val radar = object : Runnable {
+        override fun run() {
+            if (isIgniting) {
+                runLogic()
+                handler.postDelayed(this, 500)
+            } else {
+                removeOverlay()
+            }
         }
+    }
 
-        val root = rootInActiveWindow
-        if (root == null) {
-            showOverlay("WAITING: Can't see screen yet...")
-            return
-        }
+    override fun onServiceConnected() {
+        handler.post(radar)
+    }
 
-        val pkg = root.packageName?.toString() ?: "Unknown"
+    private fun runLogic() {
+        val root = rootInActiveWindow ?: return
         
-        // 1. Check for the 6-digit code (Popup)
-        val code = find6DigitCode(root)
+        // Priority 1: Check for Pairing Code (6 digits)
+        val code = findCode(root)
         if (code != null) {
-            showOverlay("CODE CAPTURED: $code")
+            showOverlay("✅ CODE FOUND: $code")
             File("/data/local/tmp/p_code.txt").writeText(code)
             isIgniting = false
             return
         }
 
-        // 2. Check for "Pair device..." button
+        // Priority 2: Check for "Pair device with pairing code"
         val pairNode = findNode(root, "Pair device with pairing code")
         if (pairNode != null) {
-            showOverlay("STAGE: In Menu. Clicking Pair...")
+            showOverlay("👆 Clicking Pair Button...")
             clickNode(pairNode)
             return
         }
 
-        // 3. Check for "Wireless debugging" row
+        // Priority 3: Check for "Wireless debugging"
         val wirelessNode = findNode(root, "Wireless debugging")
         if (wirelessNode != null) {
             if (wirelessNode.isVisibleToUser) {
-                showOverlay("STAGE: Target Visible. Clicking...")
+                showOverlay("👆 Opening Wireless Debugging...")
                 clickNode(wirelessNode)
             } else {
-                showOverlay("STAGE: Scrolling to target...")
-                powerFlick()
+                showOverlay("📜 Target below... Swiping...")
+                powerSwipe()
             }
         } else {
-            if (pkg.contains("settings")) {
-                showOverlay("STAGE: Searching settings... (Swiping)")
-                powerFlick()
+            // Priority 4: Search if in settings
+            if (root.packageName?.contains("settings") == true) {
+                showOverlay("🔎 Searching list...")
+                powerSwipe()
             } else {
-                showOverlay("STAGE: Please open Settings (PKG: $pkg)")
+                showOverlay("⏳ Waiting for Settings...")
             }
         }
     }
 
-    private fun find6DigitCode(node: AccessibilityNodeInfo): String? {
+    private fun findCode(node: AccessibilityNodeInfo): String? {
         for (i in 0 until node.childCount) {
             val child = node.getChild(i) ?: continue
             val txt = child.text?.toString() ?: ""
             if (txt.matches(Regex("\\d{6}"))) return txt
-            val result = find6DigitCode(child)
-            if (result != null) return result
+            val found = findCode(child)
+            if (found != null) return found
         }
         return null
     }
@@ -80,18 +88,19 @@ class ButtonRemapperService : AccessibilityService() {
     }
 
     private fun clickNode(node: AccessibilityNodeInfo) {
-        var target = node
+        var target: AccessibilityNodeInfo? = node
+        // Climb up to find the clickable row
         while (target != null && !target.isClickable) { target = target.parent }
         target?.performAction(AccessibilityNodeInfo.ACTION_CLICK)
     }
 
-    private fun powerFlick() {
+    private fun powerSwipe() {
         val path = Path().apply {
-            moveTo(540f, 1800f)
-            lineTo(540f, 200f)
+            moveTo(540f, 1600f)
+            lineTo(540f, 400f)
         }
         val gesture = GestureDescription.Builder()
-            .addStroke(GestureDescription.StrokeDescription(path, 0, 200))
+            .addStroke(GestureDescription.StrokeDescription(path, 0, 300))
             .build()
         dispatchGesture(gesture, null, null)
     }
@@ -100,12 +109,11 @@ class ButtonRemapperService : AccessibilityService() {
         if (statusView == null) {
             windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
             statusView = TextView(this).apply {
-                setBackgroundColor(0xFF000000.toInt())
-                setTextColor(0xFF00FF00.toInt())
-                setPadding(40, 40, 40, 40)
-                textSize = 16f
+                setBackgroundColor(0xDD000000.toInt())
+                setTextColor(Color.GREEN)
+                setPadding(40, 20, 40, 20)
+                textSize = 14f
                 gravity = Gravity.CENTER
-                setTypeface(null, Typeface.BOLD)
             }
             val params = WindowManager.LayoutParams(
                 WindowManager.LayoutParams.MATCH_PARENT,
@@ -126,6 +134,7 @@ class ButtonRemapperService : AccessibilityService() {
         } catch (e: Exception) {}
     }
 
+    override fun onAccessibilityEvent(event: AccessibilityEvent) {}
     override fun onInterrupt() {}
     companion object { var isIgniting = false; var currentSignal = "Ready..." }
 }
