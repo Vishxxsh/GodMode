@@ -1,10 +1,10 @@
 package com.unknown.godmode
 
 import android.accessibilityservice.*
+import android.content.*
 import android.graphics.*
 import android.os.*
 import android.view.*
-import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.TextView
 import java.io.File
@@ -14,70 +14,72 @@ class ButtonRemapperService : AccessibilityService() {
     private var windowManager: WindowManager? = null
     private val handler = Handler(Looper.getMainLooper())
 
-    // THE RADAR: Scans every 500ms so we don't depend on "Events"
     private val radar = object : Runnable {
         override fun run() {
             if (isIgniting) {
-                runLogic()
-                handler.postDelayed(this, 500)
+                showOverlay("RADAR ACTIVE: Scanning...")
+                runAutomation()
+                handler.postDelayed(this, 350)
             } else {
                 removeOverlay()
             }
         }
     }
 
-    override fun onServiceConnected() {
-        handler.post(radar)
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == "START_IGNITION") {
+            isIgniting = true
+            handler.post(radar)
+        }
+        return START_STICKY
     }
 
-    private fun runLogic() {
+    private fun runAutomation() {
         val root = rootInActiveWindow ?: return
         
-        // Priority 1: Check for Pairing Code (6 digits)
-        val code = findCode(root)
+        // 1. Check for Code (6 Digits)
+        val code = find6DigitCode(root)
         if (code != null) {
-            showOverlay("✅ CODE FOUND: $code")
+            showOverlay("✅ SUCCESS! CODE: $code")
             File("/data/local/tmp/p_code.txt").writeText(code)
             isIgniting = false
+            // Auto-return to app
+            val intent = Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            startActivity(intent)
             return
         }
 
-        // Priority 2: Check for "Pair device with pairing code"
+        // 2. Check for Pair Button
         val pairNode = findNode(root, "Pair device with pairing code")
-        if (pairNode != null) {
-            showOverlay("👆 Clicking Pair Button...")
+        if (pairNode != null && pairNode.isVisibleToUser) {
+            showOverlay("👇 Clicking Pair Button...")
             clickNode(pairNode)
             return
         }
 
-        // Priority 3: Check for "Wireless debugging"
+        // 3. Check for Wireless Debugging
         val wirelessNode = findNode(root, "Wireless debugging")
         if (wirelessNode != null) {
             if (wirelessNode.isVisibleToUser) {
                 showOverlay("👆 Opening Wireless Debugging...")
                 clickNode(wirelessNode)
             } else {
-                showOverlay("📜 Target below... Swiping...")
+                showOverlay("📜 Swiping down to target...")
                 powerSwipe()
             }
-        } else {
-            // Priority 4: Search if in settings
-            if (root.packageName?.contains("settings") == true) {
-                showOverlay("🔎 Searching list...")
-                powerSwipe()
-            } else {
-                showOverlay("⏳ Waiting for Settings...")
-            }
+        } else if (root.packageName?.contains("settings") == true) {
+            showOverlay("🔎 Searching for Wireless Debugging...")
+            powerSwipe()
         }
     }
 
-    private fun findCode(node: AccessibilityNodeInfo): String? {
+    private fun find6DigitCode(node: AccessibilityNodeInfo): String? {
         for (i in 0 until node.childCount) {
             val child = node.getChild(i) ?: continue
             val txt = child.text?.toString() ?: ""
             if (txt.matches(Regex("\\d{6}"))) return txt
-            val found = findCode(child)
-            if (found != null) return found
+            val result = find6DigitCode(child)
+            if (result != null) return result
         }
         return null
     }
@@ -89,18 +91,17 @@ class ButtonRemapperService : AccessibilityService() {
 
     private fun clickNode(node: AccessibilityNodeInfo) {
         var target: AccessibilityNodeInfo? = node
-        // Climb up to find the clickable row
         while (target != null && !target.isClickable) { target = target.parent }
         target?.performAction(AccessibilityNodeInfo.ACTION_CLICK)
     }
 
     private fun powerSwipe() {
         val path = Path().apply {
-            moveTo(540f, 1600f)
-            lineTo(540f, 400f)
+            moveTo(540f, 1500f)
+            lineTo(540f, 300f)
         }
         val gesture = GestureDescription.Builder()
-            .addStroke(GestureDescription.StrokeDescription(path, 0, 300))
+            .addStroke(GestureDescription.StrokeDescription(path, 0, 250))
             .build()
         dispatchGesture(gesture, null, null)
     }
@@ -109,10 +110,10 @@ class ButtonRemapperService : AccessibilityService() {
         if (statusView == null) {
             windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
             statusView = TextView(this).apply {
-                setBackgroundColor(0xDD000000.toInt())
+                setBackgroundColor(0xCC000000.toInt())
                 setTextColor(Color.GREEN)
-                setPadding(40, 20, 40, 20)
-                textSize = 14f
+                setPadding(50, 20, 50, 20)
+                textSize = 15f
                 gravity = Gravity.CENTER
             }
             val params = WindowManager.LayoutParams(
@@ -124,17 +125,14 @@ class ButtonRemapperService : AccessibilityService() {
             ).apply { gravity = Gravity.TOP }
             try { windowManager?.addView(statusView, params) } catch (e: Exception) {}
         }
-        statusView?.text = "GODMODE: $text"
+        statusView?.text = text
     }
 
     private fun removeOverlay() {
-        try {
-            statusView?.let { windowManager?.removeView(it) }
-            statusView = null
-        } catch (e: Exception) {}
+        try { statusView?.let { windowManager?.removeView(it) }; statusView = null } catch (e: Exception) {}
     }
 
-    override fun onAccessibilityEvent(event: AccessibilityEvent) {}
+    override fun onAccessibilityEvent(event: android.view.accessibility.AccessibilityEvent?) {}
     override fun onInterrupt() {}
     companion object { var isIgniting = false; var currentSignal = "Ready..." }
 }

@@ -13,30 +13,24 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
 
         findViewById<Button>(R.id.btnIgnite).setOnClickListener {
-            // Check Overlay Permission
+            // 1. Request Overlay Permission
             if (!Settings.canDrawOverlays(this)) {
-                val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))
-                startActivity(intent)
+                startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
                 return@setOnClickListener
             }
 
-            // Ignite the Radar
-            ButtonRemapperService.isIgniting = true
-            
-            // Jump to Settings
+            // 2. Start Service Radar via Intent
+            val serviceIntent = Intent(this, ButtonRemapperService::class.java).apply {
+                action = "START_IGNITION"
+            }
+            startService(serviceIntent)
+
+            // 3. Jump to Settings
             try {
                 startActivity(Intent("android.settings.WIFI_DEBUGGING_SETTINGS"))
             } catch (e: Exception) {
                 startActivity(Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS))
             }
-        }
-    }
-
-    override fun onResume() {
-        super.onResume()
-        // Reset the engine if we come back to the app manually
-        if (ButtonRemapperService.isIgniting) {
-            Toast.makeText(this, "Radar Active...", Toast.LENGTH_SHORT).show()
         }
     }
 }
