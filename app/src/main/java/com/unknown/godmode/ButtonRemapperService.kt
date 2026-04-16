@@ -14,6 +14,7 @@ class ButtonRemapperService : AccessibilityService() {
 
     private var statusView: TextView? = null
     private var windowManager: WindowManager? = null
+    private var lastPackage: String = "None"
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
         if (!isIgniting) {
@@ -21,47 +22,49 @@ class ButtonRemapperService : AccessibilityService() {
             return
         }
 
-        if (event.packageName == "com.android.settings") {
-            showOverlay("SEARCHING: Wireless debugging")
-        } else {
-            showOverlay("WAITING: Open Developer Options")
+        // Keep track of where we are for debugging
+        if (event.packageName != null) {
+            lastPackage = event.packageName.toString()
+        }
+
+        val root = rootInActiveWindow
+        if (root == null) {
+            showOverlay("ERROR: Cannot see screen. Last PKG: $lastPackage")
             return
         }
 
-        val root = rootInActiveWindow ?: return
+        // --- STEP 1: FIND TARGETS ---
+        val wirelessNode = findNode(root, "Wireless debugging")
+        val pairNode = findNode(root, "Pair device with pairing code")
+        val pairingPopupActive = findNode(root, "Pairing code") != null
 
-        // 1. LOOK FOR WIRELESS DEBUGGING
-        val target = findNodeByText(root, "Wireless debugging")
-        if (target != null && target.isVisibleToUser) {
-            showOverlay("FOUND! Clicking...")
-            clickNode(target)
-        } else {
-            showOverlay("NOT VISIBLE: Flicking screen...")
-            powerFlick() // This simulates a real finger swipe
+        // --- STEP 2: LOGIC & FEEDBACK ---
+        when {
+            pairingPopupActive -> {
+                showOverlay("STAGE: POPUP DETECTED. Scraping...")
+                scrapeData(root)
+            }
+            pairNode != null -> {
+                showOverlay("STAGE: INSIDE MENU. Clicking Pair...")
+                clickNode(pairNode)
+            }
+            wirelessNode != null -> {
+                if (wirelessNode.isVisibleToUser) {
+                    showOverlay("STAGE: TARGET SEEN. Clicking...")
+                    clickNode(wirelessNode)
+                } else {
+                    showOverlay("STAGE: TARGET OFF-SCREEN. Flicking...")
+                    powerFlick()
+                }
+            }
+            else -> {
+                showOverlay("STAGE: SEARCHING... PKG: $lastPackage")
+                if (lastPackage.contains("settings")) powerFlick()
+            }
         }
-
-        // 2. LOOK FOR PAIRING BUTTON
-        val pair = findNodeByText(root, "Pair device with pairing code")
-        if (pair != null && pair.isVisibleToUser) {
-            showOverlay("PAIRING POPUP DETECTED...")
-            clickNode(pair)
-        }
-
-        scrapeData(root)
     }
 
-    private fun powerFlick() {
-        // Simulates a physical swipe from bottom to top
-        val swipePath = Path().apply {
-            moveTo(500f, 1500f)
-            lineTo(500f, 500f)
-        }
-        val gestureBuilder = GestureDescription.Builder()
-        gestureBuilder.addStroke(GestureDescription.StrokeDescription(swipePath, 0, 300))
-        dispatchGesture(gestureBuilder.build(), null, null)
-    }
-
-    private fun findNodeByText(root: AccessibilityNodeInfo, text: String): AccessibilityNodeInfo? {
+    private fun findNode(root: AccessibilityNodeInfo, text: String): AccessibilityNodeInfo? {
         val nodes = root.findAccessibilityNodeInfosByText(text)
         return nodes?.firstOrNull()
     }
@@ -72,14 +75,24 @@ class ButtonRemapperService : AccessibilityService() {
         target?.performAction(AccessibilityNodeInfo.ACTION_CLICK)
     }
 
+    private fun powerFlick() {
+        val swipePath = Path().apply {
+            moveTo(500f, 1600f) // Start lower
+            lineTo(500f, 200f)  // Swipe higher for bigger scroll
+        }
+        val gestureBuilder = GestureDescription.Builder()
+        gestureBuilder.addStroke(GestureDescription.StrokeDescription(swipePath, 0, 400))
+        dispatchGesture(gestureBuilder.build(), null, null)
+    }
+
     private fun showOverlay(text: String) {
         if (statusView == null) {
             windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
             statusView = TextView(this).apply {
-                setBackgroundColor(0xCC000000.toInt())
-                setTextColor(0xFFFF3D00.toInt())
-                setPadding(30, 20, 30, 20)
-                textSize = 16f
+                setBackgroundColor(0xDD000000.toInt())
+                setTextColor(0xFF00FF00.toInt()) // High-vis Green
+                setPadding(40, 20, 40, 20)
+                textSize = 15f
                 gravity = Gravity.CENTER
             }
             val params = WindowManager.LayoutParams(
@@ -91,7 +104,7 @@ class ButtonRemapperService : AccessibilityService() {
             ).apply { gravity = Gravity.TOP }
             windowManager?.addView(statusView, params)
         }
-        statusView?.text = "GODMODE: $text"
+        statusView?.text = "GODMODE DEBUG: $text"
     }
 
     private fun removeOverlay() {
@@ -103,18 +116,23 @@ class ButtonRemapperService : AccessibilityService() {
         for (i in 0 until node.childCount) {
             val child = node.getChild(i) ?: continue
             val txt = child.text?.toString() ?: ""
-            if (txt.matches(Regex("\\d{6}"))) {
-                File("/data/local/tmp/p_code.txt").writeText(txt)
-                showOverlay("CODE CAPTURED: $txt")
+            
+            // Log everything found to the banner so we know what it's seeing
+            if (txt.length >= 4) {
+                // If it looks like a code, save it
+                if (txt.matches(Regex("\\d{6}"))) {
+                    File("/data/local/tmp/p_code.txt").writeText(txt)
+                    showOverlay("SUCCESS! CAUGHT CODE: $txt")
+                    isIgniting = false // Stop only when code is found
+                }
             }
             scrapeData(child)
         }
     }
 
     override fun onInterrupt() {}
-
     companion object {
         var isIgniting = false
-        var currentSignal = "Ready..." // BUILD FIX: Restored for UnknownKeyboard
+        var currentSignal = "Ready..."
     }
 }
