@@ -1,4 +1,4 @@
 <resources>
     <string name="app_name">Unknown</string>
-    <string name="accessibility_service_description">Universal Hardware Trigger Recorder for Expert Mode remapping.</string>
+    <string name="accessibility_description">GodMode Auto-Pilot: Required to automatically pair hardware buttons without a laptop.</string>
 </resources>
