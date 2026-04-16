@@ -11,6 +11,8 @@ import java.io.InputStreamReader
 class ButtonRemapperService : AccessibilityService() {
 
     private var logcatThread: Thread? = null
+    private var lastTriggerTime: Long = 0
+    private val COOLDOWN_MS = 2000 // 2 second safety gap
 
     override fun onServiceConnected() {
         val info = AccessibilityServiceInfo()
@@ -21,69 +23,56 @@ class ButtonRemapperService : AccessibilityService() {
         this.serviceInfo = info
 
         startExpertModeListener()
-        log("EXPERT MODE: LOGCAT LISTENER ACTIVE")
     }
 
     private fun startExpertModeListener() {
         logcatThread = Thread {
             try {
-                // This is the sds100 'Secret Sauce'. We read the system event log directly.
-                val process = Runtime.getRuntime().exec("logcat -b events")
+                // The '-T 1' flag tells logcat to start from 'NOW', not history
+                val process = Runtime.getRuntime().exec("logcat -b events -T 1")
                 val reader = BufferedReader(InputStreamReader(process.inputStream))
                 while (!Thread.currentThread().isInterrupted) {
                     val line = reader.readLine() ?: break
                     
-                    // If the system mentions 'assist' or key '219'/'231', we act.
-                    if (line.contains("assist", ignoreCase = true) || line.contains("219") || line.contains("231")) {
-                        log("🔥 HARDWARE TRIGGER: Assist Signal Detected!")
-                        triggerAction()
+                    val currentTime = System.currentTimeMillis()
+                    // If we see the trigger AND we haven't acted in the last 2 seconds
+                    if (line.contains("assist", ignoreCase = true) || line.contains("219")) {
+                        if (currentTime - lastTriggerTime > COOLDOWN_MS) {
+                            lastTriggerTime = currentTime
+                            triggerAction()
+                        }
                     }
                 }
-            } catch (e: Exception) {
-                log("⚠️ PERMISSION REQUIRED: Run 'adb shell pm grant com.unknown.godmode android.permission.READ_LOGS' in WebADB")
-            }
+            } catch (e: Exception) {}
         }
         logcatThread?.start()
     }
 
     private fun triggerAction() {
-        // 1. Instantly 'Kill' the system's reaction (closes the Assistant)
+        // We log it so we can see it on the screen
+        lastEvent = "🔥 [TRIGGERED] Launching App..."
+        
+        // 1. Close the Assistant overlay immediately
         performGlobalAction(GLOBAL_ACTION_BACK)
         
-        // 2. Launch your desired app (e.g., Brave Browser)
+        // 2. Launch Brave (or Gemini)
+        // Note: Make sure the package name is correct for the app you want
         val intent = packageManager.getLaunchIntentForPackage("com.brave.browser")
         intent?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         try {
             startActivity(intent)
         } catch (e: Exception) {
-            log("ERROR: App not found")
+            lastEvent = "ERROR: Brave Browser not found!"
         }
     }
 
-    override fun onKeyEvent(event: KeyEvent): Boolean {
-        // Standard keys (Volume, etc.) still show up here
-        lastKeyCode = event.keyCode
-        lastScanCode = event.scanCode
-        log("KEY: ${event.keyCode} | SCAN: ${event.scanCode}")
-        return false
-    }
-
-    override fun onAccessibilityEvent(event: AccessibilityEvent) {
-        val pkg = event.packageName?.toString() ?: ""
-        if (pkg.contains("motorola") || pkg.contains("assistant")) {
-            log("SYS_FOCUS: $pkg")
-        }
-    }
-
+    override fun onKeyEvent(event: KeyEvent): Boolean = false
+    override fun onAccessibilityEvent(event: AccessibilityEvent) {}
     override fun onInterrupt() {}
-
-    private fun log(msg: String) {
-        lastEvent = "[$msg]\n" + lastEvent.take(1000)
-    }
 
     companion object {
         var lastKeyCode = 0
         var lastScanCode = 0
-        var lastEvent = "Waiting for hardware..."
+        var lastEvent = "Engine Stable. Waiting for press..."
     }
 }
