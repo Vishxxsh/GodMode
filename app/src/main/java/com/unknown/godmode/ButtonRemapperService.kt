@@ -1,6 +1,8 @@
 package com.unknown.godmode
 
 import android.accessibilityservice.AccessibilityService
+import android.accessibilityservice.GestureDescription
+import android.graphics.Path
 import android.graphics.PixelFormat
 import android.view.*
 import android.view.accessibility.AccessibilityEvent
@@ -19,49 +21,44 @@ class ButtonRemapperService : AccessibilityService() {
             return
         }
 
-        // Show the banner if we are in Settings
         if (event.packageName == "com.android.settings") {
-            showOverlay("SEARCHING FOR: Wireless debugging")
+            showOverlay("SEARCHING: Wireless debugging")
         } else {
-            showOverlay("WAITING: Please open Developer Options")
+            showOverlay("WAITING: Open Developer Options")
             return
         }
 
         val root = rootInActiveWindow ?: return
 
-        // 1. CHECK FOR TARGET
+        // 1. LOOK FOR WIRELESS DEBUGGING
         val target = findNodeByText(root, "Wireless debugging")
-        if (target != null) {
-            if (target.isVisibleToUser) {
-                showOverlay("FOUND IT! Clicking...")
-                clickNode(target)
-            } else {
-                showOverlay("FOUND (OFF-SCREEN): Scrolling down...")
-                scrollDown(root)
-            }
+        if (target != null && target.isVisibleToUser) {
+            showOverlay("FOUND! Clicking...")
+            clickNode(target)
         } else {
-            showOverlay("NOT FOUND: Flicking list...")
-            scrollDown(root)
+            showOverlay("NOT VISIBLE: Flicking screen...")
+            powerFlick() // This simulates a real finger swipe
         }
 
-        // 2. CHECK FOR PAIRING BUTTON
+        // 2. LOOK FOR PAIRING BUTTON
         val pair = findNodeByText(root, "Pair device with pairing code")
         if (pair != null && pair.isVisibleToUser) {
-            showOverlay("OPENING PAIRING POPUP...")
+            showOverlay("PAIRING POPUP DETECTED...")
             clickNode(pair)
         }
 
         scrapeData(root)
     }
 
-    private fun scrollDown(node: AccessibilityNodeInfo) {
-        // Try to find ANY node that supports scrolling
-        if (node.actionList.contains(AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_FORWARD)) {
-            node.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
+    private fun powerFlick() {
+        // Simulates a physical swipe from bottom to top
+        val swipePath = Path().apply {
+            moveTo(500f, 1500f)
+            lineTo(500f, 500f)
         }
-        for (i in 0 until node.childCount) {
-            scrollDown(node.getChild(i) ?: continue)
-        }
+        val gestureBuilder = GestureDescription.Builder()
+        gestureBuilder.addStroke(GestureDescription.StrokeDescription(swipePath, 0, 300))
+        dispatchGesture(gestureBuilder.build(), null, null)
     }
 
     private fun findNodeByText(root: AccessibilityNodeInfo, text: String): AccessibilityNodeInfo? {
@@ -75,15 +72,14 @@ class ButtonRemapperService : AccessibilityService() {
         target?.performAction(AccessibilityNodeInfo.ACTION_CLICK)
     }
 
-    // --- OVERLAY LOGIC ---
     private fun showOverlay(text: String) {
         if (statusView == null) {
             windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
             statusView = TextView(this).apply {
-                setBackgroundColor(0xAA000000.toInt())
+                setBackgroundColor(0xCC000000.toInt())
                 setTextColor(0xFFFF3D00.toInt())
-                setPadding(20, 10, 20, 10)
-                textSize = 14f
+                setPadding(30, 20, 30, 20)
+                textSize = 16f
                 gravity = Gravity.CENTER
             }
             val params = WindowManager.LayoutParams(
@@ -95,7 +91,7 @@ class ButtonRemapperService : AccessibilityService() {
             ).apply { gravity = Gravity.TOP }
             windowManager?.addView(statusView, params)
         }
-        statusView?.text = "GODMODE DEBUG: $text"
+        statusView?.text = "GODMODE: $text"
     }
 
     private fun removeOverlay() {
@@ -109,12 +105,16 @@ class ButtonRemapperService : AccessibilityService() {
             val txt = child.text?.toString() ?: ""
             if (txt.matches(Regex("\\d{6}"))) {
                 File("/data/local/tmp/p_code.txt").writeText(txt)
-                showOverlay("GOT CODE: $txt")
+                showOverlay("CODE CAPTURED: $txt")
             }
             scrapeData(child)
         }
     }
 
     override fun onInterrupt() {}
-    companion object { var isIgniting = false }
+
+    companion object {
+        var isIgniting = false
+        var currentSignal = "Ready..." // BUILD FIX: Restored for UnknownKeyboard
+    }
 }
