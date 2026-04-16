@@ -3,7 +3,6 @@ package com.unknown.godmode
 import android.accessibilityservice.*
 import android.graphics.Path
 import android.graphics.PixelFormat
-import android.os.*
 import android.view.*
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
@@ -13,51 +12,49 @@ import java.io.File
 class ButtonRemapperService : AccessibilityService() {
     private var statusView: TextView? = null
     private var windowManager: WindowManager? = null
-    private val handler = Handler(Looper.getMainLooper())
 
-    private val pulseRunnable = object : Runnable {
-        override fun run() {
-            if (isIgniting) {
-                performSearchAndAction()
-                handler.postDelayed(this, 300) // Scan every 300ms
-            } else {
-                removeOverlay()
-            }
+    override fun onAccessibilityEvent(event: AccessibilityEvent) {
+        if (!isIgniting) {
+            removeOverlay()
+            return
         }
-    }
 
-    override fun onServiceConnected() {
-        handler.post(pulseRunnable)
-    }
+        // 1. Force the banner to show immediately
+        showOverlay("MONITORING: Searching...")
 
-    private fun performSearchAndAction() {
         val root = rootInActiveWindow ?: return
-        
-        val pairNode = findNode(root, "Pair device with pairing code")
-        val code = find6DigitCode(root)
-        val wirelessNode = findNode(root, "Wireless debugging")
 
-        when {
-            code != null -> {
-                showOverlay("SUCCESS! CODE: $code")
-                File("/data/local/tmp/p_code.txt").writeText(code)
-                isIgniting = false 
+        // 2. CHECK: Are we at the code popup?
+        val code = find6DigitCode(root)
+        if (code != null) {
+            showOverlay("CODE DETECTED: $code")
+            File("/data/local/tmp/p_code.txt").writeText(code)
+            isIgniting = false
+            return
+        }
+
+        // 3. CHECK: Are we in the sub-menu?
+        val pairNode = findNode(root, "Pair device with pairing code")
+        if (pairNode != null) {
+            showOverlay("STAGE: Inside Sub-Menu. Clicking Pair...")
+            clickNode(pairNode)
+            return
+        }
+
+        // 4. CHECK: Is Wireless Debugging visible in the main list?
+        val wirelessNode = findNode(root, "Wireless debugging")
+        if (wirelessNode != null) {
+            if (wirelessNode.isVisibleToUser) {
+                showOverlay("STAGE: Target Visible. Clicking...")
+                clickNode(wirelessNode)
+            } else {
+                showOverlay("STAGE: Target Hidden. Swiping...")
+                powerFlick()
             }
-            pairNode != null -> {
-                showOverlay("STAGE: Inside Sub-Menu. Clicking Pair...")
-                clickNode(pairNode)
-            }
-            wirelessNode != null -> {
-                if (wirelessNode.isVisibleToUser) {
-                    showOverlay("STAGE: Target Visible. Clicking...")
-                    clickNode(wirelessNode)
-                } else {
-                    showOverlay("STAGE: Target Below. Swiping...")
-                    powerFlick()
-                }
-            }
-            else -> {
-                showOverlay("STAGE: Searching settings list...")
+        } else {
+            // Only flick if we are in the settings app
+            if (root.packageName?.contains("settings") == true) {
+                showOverlay("STAGE: Searching list... (Swiping)")
                 powerFlick()
             }
         }
@@ -68,8 +65,8 @@ class ButtonRemapperService : AccessibilityService() {
             val child = node.getChild(i) ?: continue
             val txt = child.text?.toString() ?: ""
             if (txt.matches(Regex("\\d{6}"))) return txt
-            val found = find6DigitCode(child)
-            if (found != null) return found
+            val result = find6DigitCode(child)
+            if (result != null) return result
         }
         return null
     }
@@ -81,17 +78,21 @@ class ButtonRemapperService : AccessibilityService() {
 
     private fun clickNode(node: AccessibilityNodeInfo) {
         var target = node
-        while (target != null && !target.isClickable) { target = target.parent }
+        // In Moto Settings, the text itself isn't clickable, the ROW is. 
+        // We climb the tree until we find the clickable row.
+        while (target != null && !target.isClickable) {
+            target = target.parent
+        }
         target?.performAction(AccessibilityNodeInfo.ACTION_CLICK)
     }
 
     private fun powerFlick() {
         val swipePath = Path().apply {
-            moveTo(540f, 1500f) // Center-bottom
-            lineTo(540f, 400f)  // Center-top
+            moveTo(540f, 1500f) 
+            lineTo(540f, 500f)  
         }
         val gesture = GestureDescription.Builder()
-            .addStroke(GestureDescription.StrokeDescription(swipePath, 0, 250))
+            .addStroke(GestureDescription.StrokeDescription(swipePath, 0, 300))
             .build()
         dispatchGesture(gesture, null, null)
     }
@@ -100,20 +101,22 @@ class ButtonRemapperService : AccessibilityService() {
         if (statusView == null) {
             windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
             statusView = TextView(this).apply {
-                setBackgroundColor(0xEE000000.toInt())
+                setBackgroundColor(0xDD000000.toInt())
                 setTextColor(0xFF00FF00.toInt())
                 setPadding(40, 20, 40, 20)
                 textSize = 15f
                 gravity = Gravity.CENTER
             }
             val params = WindowManager.LayoutParams(
-                WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.MATCH_PARENT, 
+                WindowManager.LayoutParams.WRAP_CONTENT,
                 WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE, PixelFormat.TRANSLUCENT
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE, 
+                PixelFormat.TRANSLUCENT
             ).apply { gravity = Gravity.TOP }
             windowManager?.addView(statusView, params)
         }
-        statusView?.text = "DEBUG: $text"
+        statusView?.text = "GODMODE: $text"
     }
 
     private fun removeOverlay() {
@@ -121,7 +124,6 @@ class ButtonRemapperService : AccessibilityService() {
         statusView = null
     }
 
-    override fun onAccessibilityEvent(event: AccessibilityEvent) {}
     override fun onInterrupt() {}
     companion object { var isIgniting = false; var currentSignal = "Ready..." }
 }
