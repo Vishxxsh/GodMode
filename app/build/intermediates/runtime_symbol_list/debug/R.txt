@@ -3660,7 +3660,7 @@ int string abc_searchview_description_voice 0x7f0e0017
 int string abc_shareactionprovider_share_with 0x7f0e0018
 int string abc_shareactionprovider_share_with_application 0x7f0e0019
 int string abc_toolbar_collapse_description 0x7f0e001a
-int string accessibility_description 0x7f0e001b
+int string accessibility_service_description 0x7f0e001b
 int string androidx_startup 0x7f0e001c
 int string app_name 0x7f0e001d
 int string appbar_scrolling_view_behavior 0x7f0e001e

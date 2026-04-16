@@ -4,6 +4,6 @@ id btnEnable
 id tvAppEvent
 id tvKeyCode
 layout activity_main
-string accessibility_description
+string accessibility_service_description
 string app_name
 xml accessibility_service_config
