@@ -5,16 +5,12 @@ import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.*
 import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
-import java.io.BufferedReader
-import java.io.InputStreamReader
 
 class ButtonRemapperService : AccessibilityService() {
 
-    private var logcatThread: Thread? = null
-
-    private val motoReceiver = object : BroadcastReceiver() {
+    private val receiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
-            lastEvent = "MOTO_SIGNAL: ${intent?.action}"
+            log("BROADCAST: ${intent?.action}")
         }
     }
 
@@ -22,73 +18,56 @@ class ButtonRemapperService : AccessibilityService() {
         val info = AccessibilityServiceInfo()
         info.eventTypes = AccessibilityEvent.TYPES_ALL_MASK
         info.feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
+        // Adding every flag sds100 uses for expert mode
         info.flags = AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS or
                      AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS or
-                     AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS
+                     AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS or
+                     AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS
         this.serviceInfo = info
 
-        // Register for EVERY known Motorola hardware broadcast
         val filter = IntentFilter().apply {
             addAction("com.motorola.intent.action.STK_KEY_PRESS")
             addAction("com.motorola.actions.key_press")
-            addAction("com.motorola.smartkey.KEY_PRESS")
             addAction("android.intent.action.ASSIST")
             addAction("android.intent.action.VOICE_COMMAND")
         }
-        registerReceiver(motoReceiver, filter)
-        
-        startLogcatHunter() // Start the high-sensitivity log scanner
+        registerReceiver(receiver, filter)
+        log("Engine: Online & Listening")
     }
 
     override fun onKeyEvent(event: KeyEvent): Boolean {
-        lastKeyCode = event.keyCode
-        lastScanCode = event.scanCode
-        lastEvent = "HARDWARE_KEY: ${event.keyCode} | SCAN: ${event.scanCode}"
+        val code = event.keyCode
+        val scan = event.scanCode
+        lastKeyCode = code
+        lastScanCode = scan
         
-        // If it's an Assist-type key, we try to block the system from seeing it
-        if (event.keyCode == KeyEvent.KEYCODE_ASSIST || event.keyCode == 219 || event.keyCode == 231) {
-            lastEvent = "SUCCESS: Assist Key Captured!"
+        log("KEY: $code | SCAN: $scan | ACTION: ${if(event.action == 0) "DOWN" else "UP"}")
+
+        // Catch the 'Assist' key (219/231) or any ScanCode that isn't 0
+        if (code == 219 || code == 231 || (code == 0 && scan > 0)) {
+            log("🎯 TRIGGER CAPTURED: $code / $scan")
             return true // Hijack it
         }
         return false
     }
 
-    private fun startLogcatHunter() {
-        logcatThread = Thread {
-            try {
-                // This is how sds100 "Expert Mode" finds hidden buttons
-                val process = Runtime.getRuntime().exec("logcat -b events -v brief")
-                val reader = BufferedReader(InputStreamReader(process.inputStream))
-                while (!Thread.currentThread().isInterrupted) {
-                    val line = reader.readLine() ?: break
-                    if (line.contains("assist", ignoreCase = true) || line.contains("key", ignoreCase = true)) {
-                        lastEvent = "LOGCAT_DETECTION: ${line.takeLast(30)}"
-                    }
-                }
-            } catch (e: Exception) {}
-        }
-        logcatThread?.start()
-    }
-
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
-        if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
-            val pkg = event.packageName?.toString() ?: ""
-            if (pkg.contains("assistant") || pkg.contains("motorola")) {
-                lastEvent = "WINDOW_HIJACK: $pkg"
-            }
+        val pkg = event.packageName?.toString() ?: ""
+        val type = AccessibilityEvent.eventTypeToString(event.eventType)
+        if (pkg.contains("motorola") || pkg.contains("assistant")) {
+            log("WINDOW: $pkg | TYPE: $type")
         }
     }
 
     override fun onInterrupt() {}
-    override fun onDestroy() { 
-        super.onDestroy()
-        logcatThread?.interrupt()
-        try { unregisterReceiver(motoReceiver) } catch (e: Exception) {}
+
+    private fun log(msg: String) {
+        lastEvent = msg + "\n" + lastEvent.take(500)
     }
 
     companion object {
-        var lastKeyCode: Int = 0
-        var lastScanCode: Int = 0
-        var lastEvent: String = "Engine Online: Press any button"
+        var lastKeyCode = 0
+        var lastScanCode = 0
+        var lastEvent = "Starting..."
     }
 }
