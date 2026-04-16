@@ -4,14 +4,11 @@ import android.inputmethodservice.InputMethodService
 import android.view.KeyEvent
 
 class UnknownKeyboard : InputMethodService() {
-    // This is the VIP lane for hardware keys
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
         if (event != null) {
-            ButtonRemapperService.lastKeyCode = keyCode
-            ButtonRemapperService.lastScanCode = event.scanCode
-            ButtonRemapperService.lastEvent = "KEYBOARD_CATCH: $keyCode (Assist?)"
+            // Feed the keyboard press into the Universal Engine
+            ButtonRemapperService.currentSignal = "KEYBOARD_CODE_${keyCode}_SCAN_${event.scanCode}"
         }
-        // Return false so the button still works for now
         return false
     }
 }

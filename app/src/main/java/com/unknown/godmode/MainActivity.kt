@@ -13,21 +13,25 @@ class MainActivity : AppCompatActivity() {
         val tvSaved = findViewById<TextView>(R.id.tvSavedTrigger)
         val tvLive = findViewById<TextView>(R.id.tvLiveLog)
         val etAction = findViewById<EditText>(R.id.etAction)
-        val prefs = getSharedPreferences("REMAP_SETTINGS", MODE_PRIVATE)
+        val prefs = getSharedPreferences("GODMODE_PREFS", MODE_PRIVATE)
+
+        // Load existing settings
+        tvSaved.text = "Saved Trigger: \${prefs.getString("user_trigger", "NONE")}"
+        etAction.setText(prefs.getString("user_action", "com.brave.browser"))
 
         btnRecord.setOnClickListener {
             if (!ButtonRemapperService.isRecording) {
                 ButtonRemapperService.isRecording = true
-                btnRecord.text = "PRESS YOUR BUTTON NOW..."
+                btnRecord.text = "RECORDING... PRESS YOUR BUTTON"
             } else {
-                // Save the current signal as the trigger
                 val trigger = ButtonRemapperService.currentSignal
-                prefs.edit().putString("trigger", trigger).apply()
-                prefs.edit().putString("action", etAction.text.toString()).apply()
+                prefs.edit().putString("user_trigger", trigger).apply()
+                prefs.edit().putString("user_action", etAction.text.toString()).apply()
                 
                 ButtonRemapperService.isRecording = false
                 btnRecord.text = "START RECORDING TRIGGER"
-                tvSaved.text = "Saved Trigger: $trigger"
+                tvSaved.text = "Saved Trigger: \$trigger"
+                Toast.makeText(this, "Trigger and Action Saved!", Toast.LENGTH_SHORT).show()
             }
         }
 
