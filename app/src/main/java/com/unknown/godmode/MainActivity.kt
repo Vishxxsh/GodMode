@@ -1,5 +1,6 @@
 package com.unknown.godmode
 
+import android.content.Intent
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -12,23 +13,28 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+        handleIntent(intent)
         startUIUpdater()
     }
 
-    // This catches the key BEFORE the system hides it
+    // This catches the 'Assist' trigger when the app is already open
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleIntent(intent)
+    }
+
+    private fun handleIntent(intent: Intent?) {
+        if (intent?.action == Intent.ACTION_ASSIST) {
+            ButtonRemapperService.lastEvent = "INTENT_CATCH: Assist Button Pressed!"
+            // Here is where you can trigger your custom action!
+        }
+    }
+
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        val keyCode = event.keyCode
-        val scanCode = event.scanCode
-        
         if (event.action == KeyEvent.ACTION_DOWN) {
-            ButtonRemapperService.lastKeyCode = keyCode
-            ButtonRemapperService.lastScanCode = scanCode
-            ButtonRemapperService.lastEvent = "ACTIVITY_CATCH: $keyCode | SCAN: $scanCode"
-            
-            // If it's the Assist button, we stop the Google Assistant from popping up
-            if (keyCode == KeyEvent.KEYCODE_ASSIST || keyCode == 219 || keyCode == 231) {
-                return true 
-            }
+            ButtonRemapperService.lastKeyCode = event.keyCode
+            ButtonRemapperService.lastScanCode = event.scanCode
+            ButtonRemapperService.lastEvent = "KEY_CATCH: ${event.keyCode}"
         }
         return super.dispatchKeyEvent(event)
     }
