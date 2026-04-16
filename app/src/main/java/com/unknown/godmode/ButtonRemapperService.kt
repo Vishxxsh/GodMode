@@ -23,40 +23,46 @@ class ButtonRemapperService : AccessibilityService() {
 
         val root = rootInActiveWindow ?: return
         val currentPkg = root.packageName?.toString() ?: "Unknown"
-
-        // --- STEP 1: NAVIGATION LOGIC ---
+        
+        // --- RE-SCAN THE BRAIN ---
         val wirelessNode = findNode(root, "Wireless debugging")
         val pairButtonNode = findNode(root, "Pair device with pairing code")
-        val possibleCode = findPairingCode(root)
+        val codePopupNode = findNode(root, "Pairing code") // Looking for the popup title
 
         when {
-            // Priority 1: We see a 6-digit code (The Popup is open)
-            possibleCode != null -> {
-                showOverlay("STAGE: POPUP OPEN! Code Caught: $possibleCode")
-                File("/data/local/tmp/p_code.txt").writeText(possibleCode)
-                isIgniting = false 
+            // STAGE 4: THE POPUP IS OPEN
+            codePopupNode != null || find6DigitCode(root) != null -> {
+                val code = find6DigitCode(root)
+                if (code != null) {
+                    showOverlay("CODE CAPTURED: $code")
+                    File("/data/local/tmp/p_code.txt").writeText(code)
+                    isIgniting = false // Mission Accomplished
+                } else {
+                    showOverlay("STAGE: Popup detected, waiting for code...")
+                }
             }
-            
-            // Priority 2: We are in the sub-menu, but haven't clicked 'Pair' yet
+
+            // STAGE 3: INSIDE THE SUB-MENU
             pairButtonNode != null -> {
-                showOverlay("STAGE: Sub-Menu Found. Clicking 'Pair'...")
+                showOverlay("STAGE: Inside Wireless Debugging. Clicking Pair...")
                 clickNode(pairButtonNode)
             }
-            
-            // Priority 3: We are in Developer Options, looking for 'Wireless debugging'
+
+            // STAGE 2: IN DEVELOPER OPTIONS
             wirelessNode != null -> {
                 if (wirelessNode.isVisibleToUser) {
-                    showOverlay("STAGE: Target Found. Entering Menu...")
+                    showOverlay("STAGE: Target Found. Clicking...")
                     clickNode(wirelessNode)
                 } else {
-                    showOverlay("STAGE: Target Hidden. Flicking... (PKG: $currentPkg)")
+                    showOverlay("STAGE: Target hidden below. Flicking...")
                     powerFlick()
                 }
             }
-            
-            // Priority 4: Searching...
+
+            // STAGE 1: SEARCHING
             else -> {
-                showOverlay("STAGE: Searching Settings... (PKG: $currentPkg)")
+                showOverlay("STAGE: Searching... (Last PKG: $currentPkg)")
+                // If we are in Settings, we must scroll to find the target
                 if (currentPkg.contains("settings")) {
                     powerFlick()
                 }
@@ -64,13 +70,13 @@ class ButtonRemapperService : AccessibilityService() {
         }
     }
 
-    private fun findPairingCode(node: AccessibilityNodeInfo): String? {
+    private fun find6DigitCode(node: AccessibilityNodeInfo): String? {
         for (i in 0 until node.childCount) {
             val child = node.getChild(i) ?: continue
-            val txt = child.text?.toString() ?: ""
-            if (txt.matches(Regex("\\d{6}"))) return txt
-            val result = findPairingCode(child)
-            if (result != null) return result
+            val text = child.text?.toString() ?: ""
+            if (text.matches(Regex("\\d{6}"))) return text
+            val found = find6DigitCode(child)
+            if (found != null) return found
         }
         return null
     }
@@ -88,11 +94,11 @@ class ButtonRemapperService : AccessibilityService() {
 
     private fun powerFlick() {
         val swipePath = Path().apply {
-            moveTo(500f, 1600f)
-            lineTo(500f, 400f)
+            moveTo(500f, 1500f) // Start lower
+            lineTo(500f, 300f)  // Swipe much higher
         }
         val gestureBuilder = GestureDescription.Builder()
-        gestureBuilder.addStroke(GestureDescription.StrokeDescription(swipePath, 0, 350))
+        gestureBuilder.addStroke(GestureDescription.StrokeDescription(swipePath, 0, 200)) // Faster swipe
         dispatchGesture(gestureBuilder.build(), null, null)
     }
 
@@ -101,7 +107,7 @@ class ButtonRemapperService : AccessibilityService() {
             windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
             statusView = TextView(this).apply {
                 setBackgroundColor(0xEE000000.toInt())
-                setTextColor(0xFF00FF00.toInt())
+                setTextColor(0xFF00FF00.toInt()) // Neon Green
                 setPadding(40, 30, 40, 30)
                 textSize = 14f
                 gravity = Gravity.CENTER
