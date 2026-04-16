@@ -1,8 +1,7 @@
 package com.unknown.godmode
 
 import android.accessibilityservice.AccessibilityService
-import android.accessibilityservice.AccessibilityServiceInfo
-import android.content.Intent
+import android.content.*
 import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
 import java.io.BufferedReader
@@ -10,69 +9,60 @@ import java.io.InputStreamReader
 
 class ButtonRemapperService : AccessibilityService() {
 
-    private var logcatThread: Thread? = null
-    private var lastTriggerTime: Long = 0
-    private val COOLDOWN_MS = 2000 // 2 second safety gap
-
     override fun onServiceConnected() {
-        val info = AccessibilityServiceInfo()
-        info.eventTypes = AccessibilityEvent.TYPES_ALL_MASK
-        info.feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
-        info.flags = AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS or
-                     AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
+        val info = serviceInfo
+        info.flags = info.flags or 32 // flagRequestFilterKeyEvents
         this.serviceInfo = info
-
-        startExpertModeListener()
+        startUniversalListener()
     }
 
-    private fun startExpertModeListener() {
-        logcatThread = Thread {
+    private fun startUniversalListener() {
+        Thread {
             try {
-                // The '-T 1' flag tells logcat to start from 'NOW', not history
-                val process = Runtime.getRuntime().exec("logcat -b events -T 1")
+                // Stabilized logcat: only looks for events and main input logs
+                val process = Runtime.getRuntime().exec("logcat -b events -b main -T 1")
                 val reader = BufferedReader(InputStreamReader(process.inputStream))
                 while (!Thread.currentThread().isInterrupted) {
                     val line = reader.readLine() ?: break
                     
-                    val currentTime = System.currentTimeMillis()
-                    // If we see the trigger AND we haven't acted in the last 2 seconds
-                    if (line.contains("assist", ignoreCase = true) || line.contains("219")) {
-                        if (currentTime - lastTriggerTime > COOLDOWN_MS) {
-                            lastTriggerTime = currentTime
-                            triggerAction()
-                        }
+                    // Always update the live feed so user can see what's happening
+                    currentSignal = line
+                    
+                    val prefs = getSharedPreferences("REMAP_SETTINGS", MODE_PRIVATE)
+                    val savedTrigger = prefs.getString("trigger", null)
+                    val savedAction = prefs.getString("action", "com.android.chrome")
+
+                    // If we aren't recording and the line matches our saved trigger...
+                    if (!isRecording && savedTrigger != null && line.contains(savedTrigger)) {
+                        executeAction(savedAction!!)
                     }
                 }
-            } catch (e: Exception) {}
-        }
-        logcatThread?.start()
+            } catch (e: Exception) { currentSignal = "Logcat Error: Run ADB Command" }
+        }.start()
     }
 
-    private fun triggerAction() {
-        // We log it so we can see it on the screen
-        lastEvent = "🔥 [TRIGGERED] Launching App..."
-        
-        // 1. Close the Assistant overlay immediately
-        performGlobalAction(GLOBAL_ACTION_BACK)
-        
-        // 2. Launch Brave (or Gemini)
-        // Note: Make sure the package name is correct for the app you want
-        val intent = packageManager.getLaunchIntentForPackage("com.brave.browser")
+    private fun executeAction(pkg: String) {
+        val intent = packageManager.getLaunchIntentForPackage(pkg)
         intent?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         try {
             startActivity(intent)
-        } catch (e: Exception) {
-            lastEvent = "ERROR: Brave Browser not found!"
-        }
+            performGlobalAction(GLOBAL_ACTION_BACK) // Close default assistant
+        } catch (e: Exception) { currentSignal = "FAILED TO LAUNCH $pkg" }
     }
 
-    override fun onKeyEvent(event: KeyEvent): Boolean = false
+    override fun onKeyEvent(event: KeyEvent): Boolean {
+        if (event.action == KeyEvent.ACTION_DOWN) {
+            currentSignal = "KEYCODE_${event.keyCode}"
+        }
+        return false
+    }
+
     override fun onAccessibilityEvent(event: AccessibilityEvent) {}
     override fun onInterrupt() {}
 
     companion object {
-        var lastKeyCode = 0
-        var lastScanCode = 0
-        var lastEvent = "Engine Stable. Waiting for press..."
+        var isRecording = false
+        var currentSignal = "Waiting..."
+        var lastEvent = ""
     }
 }
