@@ -1,49 +1,36 @@
 package com.unknown.godmode
 
-import android.os.*
+import android.os.Bundle
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
+import java.io.File
 
 class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        val btnRecord = findViewById<Button>(R.id.btnRecord)
-        val tvSaved = findViewById<TextView>(R.id.tvSavedTrigger)
-        val tvLive = findViewById<TextView>(R.id.tvLiveLog)
-        val etAction = findViewById<EditText>(R.id.etAction)
-        val prefs = getSharedPreferences("GODMODE_PREFS", MODE_PRIVATE)
+        val etHex = EditText(this).apply { hint = "Enter Hex (e.g. 00d9)" }
+        val etPkg = EditText(this).apply { hint = "Enter Package (e.g. com.brave.browser)" }
+        val btnSave = Button(this).apply { text = "SAVE TO HARDWARE BRIDGE" }
 
-        // Load your previous choice
-        val saved = prefs.getString("user_trigger", "NONE")
-        tvSaved.text = "Active Trigger: " + saved
-        etAction.setText(prefs.getString("user_action", "com.brave.browser"))
+        val layout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(etHex)
+            addView(etPkg)
+            addView(btnSave)
+        }
+        setContentView(layout)
 
-        btnRecord.setOnClickListener {
-            if (!ButtonRemapperService.isRecording) {
-                ButtonRemapperService.isRecording = true
-                btnRecord.text = "RECORDING... PRESS ANY BUTTON"
-            } else {
-                val foundTrigger = ButtonRemapperService.currentSignal
-                val chosenAction = etAction.text.toString()
-                
-                prefs.edit().putString("user_trigger", foundTrigger).apply()
-                prefs.edit().putString("user_action", chosenAction).apply()
-                
-                ButtonRemapperService.isRecording = false
-                btnRecord.text = "START RECORDING TRIGGER"
-                tvSaved.text = "Active Trigger: " + foundTrigger
-                Toast.makeText(this, "Success! Trigger Mapped.", Toast.LENGTH_SHORT).show()
+        btnSave.setOnClickListener {
+            // We write to /data/local/tmp because both App and Shell can access it
+            val configFile = File("/data/local/tmp/godmode.cfg")
+            try {
+                configFile.writeText("${etHex.text}\n${etPkg.text}")
+                Toast.makeText(this, "Config Sent to Bridge", Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                Toast.makeText(this, "Permission Error: Run ADB chmod", Toast.LENGTH_LONG).show()
             }
         }
-
-        val handler = Handler(Looper.getMainLooper())
-        handler.post(object : Runnable {
-            override fun run() {
-                tvLive.text = "LIVE SIGNAL:\n" + ButtonRemapperService.currentSignal
-                handler.postDelayed(this, 100)
-            }
-        })
     }
 }
