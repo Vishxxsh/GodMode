@@ -1,8 +1,7 @@
 package com.unknown.godmode
 
 import android.accessibilityservice.*
-import android.graphics.Path
-import android.graphics.PixelFormat
+import android.graphics.*
 import android.view.*
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
@@ -19,43 +18,47 @@ class ButtonRemapperService : AccessibilityService() {
             return
         }
 
-        // 1. Force the banner to show immediately
-        showOverlay("MONITORING: Searching...")
+        val root = rootInActiveWindow
+        if (root == null) {
+            showOverlay("WAITING: Can't see screen yet...")
+            return
+        }
 
-        val root = rootInActiveWindow ?: return
-
-        // 2. CHECK: Are we at the code popup?
+        val pkg = root.packageName?.toString() ?: "Unknown"
+        
+        // 1. Check for the 6-digit code (Popup)
         val code = find6DigitCode(root)
         if (code != null) {
-            showOverlay("CODE DETECTED: $code")
+            showOverlay("CODE CAPTURED: $code")
             File("/data/local/tmp/p_code.txt").writeText(code)
             isIgniting = false
             return
         }
 
-        // 3. CHECK: Are we in the sub-menu?
+        // 2. Check for "Pair device..." button
         val pairNode = findNode(root, "Pair device with pairing code")
         if (pairNode != null) {
-            showOverlay("STAGE: Inside Sub-Menu. Clicking Pair...")
+            showOverlay("STAGE: In Menu. Clicking Pair...")
             clickNode(pairNode)
             return
         }
 
-        // 4. CHECK: Is Wireless Debugging visible in the main list?
+        // 3. Check for "Wireless debugging" row
         val wirelessNode = findNode(root, "Wireless debugging")
         if (wirelessNode != null) {
             if (wirelessNode.isVisibleToUser) {
                 showOverlay("STAGE: Target Visible. Clicking...")
                 clickNode(wirelessNode)
             } else {
-                showOverlay("STAGE: Target Hidden. Swiping...")
+                showOverlay("STAGE: Scrolling to target...")
                 powerFlick()
             }
         } else {
-            // Only flick if we are in the settings app
-            if (root.packageName?.contains("settings") == true) {
-                showOverlay("STAGE: Searching list... (Swiping)")
+            if (pkg.contains("settings")) {
+                showOverlay("STAGE: Searching settings... (Swiping)")
                 powerFlick()
+            } else {
+                showOverlay("STAGE: Please open Settings (PKG: $pkg)")
             }
         }
     }
@@ -78,21 +81,17 @@ class ButtonRemapperService : AccessibilityService() {
 
     private fun clickNode(node: AccessibilityNodeInfo) {
         var target = node
-        // In Moto Settings, the text itself isn't clickable, the ROW is. 
-        // We climb the tree until we find the clickable row.
-        while (target != null && !target.isClickable) {
-            target = target.parent
-        }
+        while (target != null && !target.isClickable) { target = target.parent }
         target?.performAction(AccessibilityNodeInfo.ACTION_CLICK)
     }
 
     private fun powerFlick() {
-        val swipePath = Path().apply {
-            moveTo(540f, 1500f) 
-            lineTo(540f, 500f)  
+        val path = Path().apply {
+            moveTo(540f, 1800f)
+            lineTo(540f, 200f)
         }
         val gesture = GestureDescription.Builder()
-            .addStroke(GestureDescription.StrokeDescription(swipePath, 0, 300))
+            .addStroke(GestureDescription.StrokeDescription(path, 0, 200))
             .build()
         dispatchGesture(gesture, null, null)
     }
@@ -101,27 +100,30 @@ class ButtonRemapperService : AccessibilityService() {
         if (statusView == null) {
             windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
             statusView = TextView(this).apply {
-                setBackgroundColor(0xDD000000.toInt())
+                setBackgroundColor(0xFF000000.toInt())
                 setTextColor(0xFF00FF00.toInt())
-                setPadding(40, 20, 40, 20)
-                textSize = 15f
+                setPadding(40, 40, 40, 40)
+                textSize = 16f
                 gravity = Gravity.CENTER
+                setTypeface(null, Typeface.BOLD)
             }
             val params = WindowManager.LayoutParams(
-                WindowManager.LayoutParams.MATCH_PARENT, 
+                WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.WRAP_CONTENT,
                 WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE, 
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
                 PixelFormat.TRANSLUCENT
             ).apply { gravity = Gravity.TOP }
-            windowManager?.addView(statusView, params)
+            try { windowManager?.addView(statusView, params) } catch (e: Exception) {}
         }
         statusView?.text = "GODMODE: $text"
     }
 
     private fun removeOverlay() {
-        statusView?.let { windowManager?.removeView(it) }
-        statusView = null
+        try {
+            statusView?.let { windowManager?.removeView(it) }
+            statusView = null
+        } catch (e: Exception) {}
     }
 
     override fun onInterrupt() {}
