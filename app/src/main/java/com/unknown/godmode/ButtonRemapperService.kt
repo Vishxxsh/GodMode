@@ -8,42 +8,46 @@ import java.io.File
 class ButtonRemapperService : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
-        // AUTO-PILOT LOGIC: If we are in Settings, look for pairing info
-        if (event.packageName == "com.android.settings") {
-            val root = rootInActiveWindow ?: return
-            findPairingInfo(root)
+        // Only run if the user just tapped "IGNITE"
+        if (!isIgniting) return
+
+        val root = rootInActiveWindow ?: return
+        
+        // 1. Look for the "Pair device with pairing code" button and CLICK IT
+        val pairButtons = root.findAccessibilityNodeInfosByText("Pair device with pairing code")
+        if (pairButtons.isNotEmpty()) {
+            pairButtons[0].performAction(AccessibilityNodeInfo.ACTION_CLICK)
+            return
         }
+
+        // 2. Look for the 6-digit code in the popup
+        findPairingData(root)
     }
 
-    private fun findPairingInfo(node: AccessibilityNodeInfo) {
-        // We look for the 6-digit code and the port number on the screen
+    private fun findPairingData(node: AccessibilityNodeInfo) {
         for (i in 0 until node.childCount) {
             val child = node.getChild(i) ?: continue
             val text = child.text?.toString() ?: ""
             
-            // If we see a 6-digit number, it's likely the pairing code
+            // Match 6-digit code (e.g., 123456)
             if (text.matches(Regex("\\d{6}"))) {
-                File("/data/local/tmp/pair_code.txt").writeText(text)
+                File("/data/local/tmp/p_code.txt").writeText(text)
             }
-            
-            // If we see a port (e.g., 192.168.1.1:34567), we grab the port
+            // Match port (e.g., 192.168.1.1:34567)
             if (text.contains(":")) {
                 val port = text.substringAfterLast(":")
                 if (port.all { it.isDigit() }) {
-                    File("/data/local/tmp/pair_port.txt").writeText(port)
+                    File("/data/local/tmp/p_port.txt").writeText(port)
                 }
             }
-            findPairingInfo(child)
+            findPairingData(child)
         }
     }
 
     override fun onInterrupt() {}
-    override fun onServiceConnected() {
-        // Standard setup from before remains...
-    }
     
     companion object {
+        var isIgniting = false
         var currentSignal = "Ready..."
-        var isRecording = false
     }
 }
