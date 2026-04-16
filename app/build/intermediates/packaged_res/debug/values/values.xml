@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="accessibility_description">Hardware button remapping for Moto Edge 60 Pro.</string>
+    <string name="app_name">God Mode</string>
+</resources>

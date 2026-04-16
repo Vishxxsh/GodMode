@@ -1,0 +1,14 @@
+[
+    {
+        "merged": "/home/codespace/.gradle/daemon/8.5/com.unknown.godmode.app-merged_res-31:/xml_accessibility_service_config.xml.flat",
+        "source": "/home/codespace/.gradle/daemon/8.5/com.unknown.godmode.app-main-33:/xml/accessibility_service_config.xml"
+    },
+    {
+        "merged": "/home/codespace/.gradle/daemon/8.5/com.unknown.godmode.app-merged_res-31:/layout_activity_main.xml.flat",
+        "source": "/home/codespace/.gradle/daemon/8.5/com.unknown.godmode.app-main-33:/layout/activity_main.xml"
+    },
+    {
+        "merged": "com.unknown.godmode.app-merged_res-31:/layout_activity_main.xml.flat",
+        "source": "com.unknown.godmode.app-main-33:/layout/activity_main.xml"
+    }
+]
