@@ -1,4 +1,5 @@
 package com.unknown.godmode
+
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -7,26 +8,24 @@ import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 
 class MainActivity : AppCompatActivity() {
+    
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
         startUIUpdater()
     }
 
-    // This is what your friend was talking about! 
-    // It catches the key while you are looking at the app.
+    // This catches the key BEFORE the system hides it
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         val keyCode = event.keyCode
         val scanCode = event.scanCode
         
         if (event.action == KeyEvent.ACTION_DOWN) {
-            // Update the shared variables so the UI shows it immediately
             ButtonRemapperService.lastKeyCode = keyCode
             ButtonRemapperService.lastScanCode = scanCode
             ButtonRemapperService.lastEvent = "ACTIVITY_CATCH: $keyCode | SCAN: $scanCode"
             
-            // If it's the Assist key, we might want to "consume" it (return true)
-            // so the Google Assistant doesn't pop up and annoy you.
+            // If it's the Assist button, we stop the Google Assistant from popping up
             if (keyCode == KeyEvent.KEYCODE_ASSIST || keyCode == 219 || keyCode == 231) {
                 return true 
             }
