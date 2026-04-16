@@ -1,53 +1,108 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:padding="16dp"
-    android:background="#000000">
+    android:background="#0A0A0A"
+    android:padding="20dp">
 
-    <TextView
+    <LinearLayout
+        android:id="@+id/headerGroup"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="UNIVERSAL REMAPPER: FINAL BUILD"
-        android:textColor="#FF0000"
-        android:textStyle="bold"
-        android:gravity="center" />
+        android:orientation="vertical"
+        android:layout_marginBottom="24dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="GODMODE"
+            android:textColor="#FF3D00"
+            android:textSize="32sp"
+            android:textStyle="bold"
+            android:letterSpacing="0.1" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="System Controller v2.0"
+            android:textColor="#888888"
+            android:textSize="14sp" />
+    </LinearLayout>
+
+    <androidx.cardview.widget.CardView
+        android:id="@+id/statusCard"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/headerGroup"
+        app:cardBackgroundColor="#1A1A1A"
+        app:cardCornerRadius="16dp"
+        app:cardElevation="0dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:padding="20dp"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/tvStatus"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="ENGINE: OFFLINE"
+                android:textColor="#FF5252"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <Button
+                android:id="@+id/btnIgnite"
+                android:layout_width="match_parent"
+                android:layout_height="55dp"
+                android:layout_marginTop="12dp"
+                android:text="IGNITE ENGINE"
+                android:backgroundTint="#2E7D32"
+                android:textColor="#FFFFFF"
+                app:cornerRadius="8dp" />
+        </LinearLayout>
+    </androidx.cardview.widget.CardView>
+
+    <TextView
+        android:id="@+id/listLabel"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/statusCard"
+        android:layout_marginTop="24dp"
+        android:text="ACTIVE MAGIC BUTTONS"
+        android:textColor="#555555"
+        android:textSize="12sp"
+        android:textStyle="bold" />
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_below="@id/listLabel"
+        android:layout_above="@+id/btnAddNew"
+        android:layout_marginTop="8dp"
+        android:layout_marginBottom="16dp"
+        android:scrollbarThumbVertical="@null">
+
+        <LinearLayout
+            android:id="@+id/remapList"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical" />
+    </ScrollView>
 
     <Button
-        android:id="@+id/btnRecord"
+        android:id="@+id/btnAddNew"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="START RECORDING TRIGGER"
-        android:layout_marginTop="10dp" />
-
-    <TextView
-        android:id="@+id/tvSavedTrigger"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Saved Trigger: NONE"
-        android:textColor="#00FF00"
-        android:padding="10dp" />
-
-    <EditText
-        android:id="@+id/etAction"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:hint="Enter Package Name (e.g. com.brave.browser)"
+        android:layout_height="65dp"
+        android:layout_alignParentBottom="true"
+        android:text="➕ ADD NEW TRIGGER"
+        android:backgroundTint="#FF3D00"
         android:textColor="#FFFFFF"
-        android:background="#333333"
-        android:padding="10dp"
-        android:layout_marginTop="10dp"/>
+        android:textStyle="bold"
+        android:textSize="16sp"
+        app:cornerRadius="12dp" />
 
-    <TextView
-        android:id="@+id/tvLiveLog"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:text="Live System Feed..."
-        android:textColor="#AAAAAA"
-        android:textSize="12sp"
-        android:scrollbars="vertical"
-        android:layout_marginTop="10dp" />
-
-</LinearLayout>
+</RelativeLayout>

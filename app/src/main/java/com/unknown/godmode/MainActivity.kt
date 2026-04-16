@@ -1,36 +1,74 @@
 package com.unknown.godmode
 
-import android.os.Bundle
+import android.os.*
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
 import java.io.File
+import java.net.Socket
 
 class MainActivity : AppCompatActivity() {
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        val etHex = EditText(this).apply { hint = "Enter Hex (e.g. 00d9)" }
-        val etPkg = EditText(this).apply { hint = "Enter Package (e.g. com.brave.browser)" }
-        val btnSave = Button(this).apply { text = "SAVE TO HARDWARE BRIDGE" }
+        val btnIgnite = findViewById<Button>(R.id.btnIgnite)
+        val tvStatus = findViewById<TextView>(R.id.tvStatus)
 
+        // Check if Bridge is already running
+        if (isBridgeAlive()) {
+            tvStatus.text = "ENGINE: ACTIVE"
+            tvStatus.setTextColor(android.graphics.Color.GREEN)
+            btnIgnite.visibility = android.view.View.GONE
+        }
+
+        btnIgnite.setOnClickListener {
+            showPairingDialog()
+        }
+    }
+
+    private fun showPairingDialog() {
         val layout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            addView(etHex)
-            addView(etPkg)
-            addView(btnSave)
+            setPadding(50, 40, 50, 10)
         }
-        setContentView(layout)
+        val etPort = EditText(this).apply { hint = "Port (e.g. 34567)" }
+        val etCode = EditText(this).apply { hint = "Pairing Code" }
+        layout.addView(etPort)
+        layout.addView(etCode)
 
-        btnSave.setOnClickListener {
-            // We write to /data/local/tmp because both App and Shell can access it
-            val configFile = File("/data/local/tmp/godmode.cfg")
-            try {
-                configFile.writeText("${etHex.text}\n${etPkg.text}")
-                Toast.makeText(this, "Config Sent to Bridge", Toast.LENGTH_SHORT).show()
-            } catch (e: Exception) {
-                Toast.makeText(this, "Permission Error: Run ADB chmod", Toast.LENGTH_LONG).show()
+        android.app.AlertDialog.Builder(this)
+            .setTitle("Wireless Connect")
+            .setMessage("Enable 'Wireless Debugging' in Settings, then tap 'Pair with code'")
+            .setView(layout)
+            .setPositiveButton("CONNECT") { _, _ ->
+                launchInternalBridge(etPort.text.toString(), etCode.text.toString())
             }
-        }
+            .show()
+    }
+
+    private fun launchInternalBridge(port: String, code: String) {
+        Thread {
+            try {
+                // This is the internal "magic" command that replicates WebADB
+                val cmd = "export CLASSPATH=\$(pm path com.unknown.godmode | sed 's/package://'); app_process / com.unknown.godmode.SystemBridge"
+                
+                // We use the shell to pair and run
+                val process = Runtime.getRuntime().exec(arrayOf("sh", "-c", "adb pair localhost:\$port \$code && adb shell \"\$cmd\""))
+                
+                runOnUiThread {
+                    Toast.makeText(this, "Ignition Successful!", Toast.LENGTH_SHORT).show()
+                    recreate() // Refresh UI
+                }
+            } catch (e: Exception) {
+                runOnUiThread { Toast.makeText(this, "Failed: \${e.message}", Toast.LENGTH_LONG).show() }
+            }
+        }.start()
+    }
+
+    private fun isBridgeAlive(): Boolean {
+        // If the live_signal file was updated in the last 2 seconds, it's alive
+        val file = File("/data/local/tmp/live_signal.txt")
+        return file.exists() && (System.currentTimeMillis() - file.lastModified() < 2000)
     }
 }
