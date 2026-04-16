@@ -1,6 +1,5 @@
 package com.unknown.godmode
 
-import android.content.Intent
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -9,34 +8,18 @@ import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 
 class MainActivity : AppCompatActivity() {
-    
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
-        handleIntent(intent)
         startUIUpdater()
     }
 
-    // This catches the 'Assist' trigger when the app is already open
-    override fun onNewIntent(intent: Intent) {
-        super.onNewIntent(intent)
-        handleIntent(intent)
-    }
-
-    private fun handleIntent(intent: Intent?) {
-        if (intent?.action == Intent.ACTION_ASSIST) {
-            ButtonRemapperService.lastEvent = "INTENT_CATCH: Assist Button Pressed!"
-            // Here is where you can trigger your custom action!
-        }
-    }
-
-    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        if (event.action == KeyEvent.ACTION_DOWN) {
-            ButtonRemapperService.lastKeyCode = event.keyCode
-            ButtonRemapperService.lastScanCode = event.scanCode
-            ButtonRemapperService.lastEvent = "KEY_CATCH: ${event.keyCode}"
-        }
-        return super.dispatchKeyEvent(event)
+    // Direct foreground override
+    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        ButtonRemapperService.lastKeyCode = keyCode
+        ButtonRemapperService.lastScanCode = event?.scanCode ?: 0
+        ButtonRemapperService.lastEvent = "ACTIVITY_DOWN: $keyCode"
+        return super.onKeyDown(keyCode, event)
     }
 
     private fun startUIUpdater() {
