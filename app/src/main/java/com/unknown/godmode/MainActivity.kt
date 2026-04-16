@@ -15,30 +15,33 @@ class MainActivity : AppCompatActivity() {
         val etAction = findViewById<EditText>(R.id.etAction)
         val prefs = getSharedPreferences("GODMODE_PREFS", MODE_PRIVATE)
 
-        // Load existing settings
-        tvSaved.text = "Saved Trigger: \${prefs.getString("user_trigger", "NONE")}"
+        // Load your previous choice
+        val saved = prefs.getString("user_trigger", "NONE")
+        tvSaved.text = "Active Trigger: " + saved
         etAction.setText(prefs.getString("user_action", "com.brave.browser"))
 
         btnRecord.setOnClickListener {
             if (!ButtonRemapperService.isRecording) {
                 ButtonRemapperService.isRecording = true
-                btnRecord.text = "RECORDING... PRESS YOUR BUTTON"
+                btnRecord.text = "RECORDING... PRESS ANY BUTTON"
             } else {
-                val trigger = ButtonRemapperService.currentSignal
-                prefs.edit().putString("user_trigger", trigger).apply()
-                prefs.edit().putString("user_action", etAction.text.toString()).apply()
+                val foundTrigger = ButtonRemapperService.currentSignal
+                val chosenAction = etAction.text.toString()
+                
+                prefs.edit().putString("user_trigger", foundTrigger).apply()
+                prefs.edit().putString("user_action", chosenAction).apply()
                 
                 ButtonRemapperService.isRecording = false
                 btnRecord.text = "START RECORDING TRIGGER"
-                tvSaved.text = "Saved Trigger: \$trigger"
-                Toast.makeText(this, "Trigger and Action Saved!", Toast.LENGTH_SHORT).show()
+                tvSaved.text = "Active Trigger: " + foundTrigger
+                Toast.makeText(this, "Success! Trigger Mapped.", Toast.LENGTH_SHORT).show()
             }
         }
 
         val handler = Handler(Looper.getMainLooper())
         handler.post(object : Runnable {
             override fun run() {
-                tvLive.text = ButtonRemapperService.currentSignal
+                tvLive.text = "LIVE SIGNAL:\n" + ButtonRemapperService.currentSignal
                 handler.postDelayed(this, 100)
             }
         })

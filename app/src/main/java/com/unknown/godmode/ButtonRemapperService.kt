@@ -21,90 +21,64 @@ class ButtonRemapperService : AccessibilityService() {
                      AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
         this.serviceInfo = info
         
-        startUniversalLogListener()
+        startLogcatListener()
     }
 
-    private fun startUniversalLogListener() {
+    private fun startLogcatListener() {
         logcatThread = Thread {
             try {
-                // Listen to main and event logs, starting from 'now' to avoid loops
+                // Starts listening to logs from 'now' to prevent loop-crashes
                 val process = Runtime.getRuntime().exec("logcat -b main -b events -T 1")
                 val reader = BufferedReader(InputStreamReader(process.inputStream))
                 while (!Thread.currentThread().isInterrupted) {
                     val line = reader.readLine() ?: break
-                    
-                    // Update the live feed for the UI
-                    currentSignal = line
+                    currentSignal = line // Show everything to the user for recording
                     
                     val prefs = getSharedPreferences("GODMODE_PREFS", MODE_PRIVATE)
-                    val savedTrigger = prefs.getString("user_trigger", null)
-                    val savedAction = prefs.getString("user_action", null)
-
-                    // If NOT recording and the log line contains our saved trigger...
-                    if (!isRecording && savedTrigger != null && line.contains(savedTrigger)) {
-                        val now = System.currentTimeMillis()
-                        if (now - lastActionTime > 2000) { // 2s Cooldown
-                            lastActionTime = now
-                            executeUserAction(savedAction)
-                        }
+                    val trigger = prefs.getString("user_trigger", null)
+                    
+                    if (!isRecording && trigger != null && line.contains(trigger)) {
+                        checkAndExecute()
                     }
                 }
-            } catch (e: Exception) {
-                currentSignal = "LOG_ERROR: Grant READ_LOGS permission"
-            }
+            } catch (e: Exception) { currentSignal = "LOG_ERROR: Run ADB Grant" }
         }
         logcatThread?.start()
     }
 
-    private fun executeUserAction(packageName: String?) {
-        if (packageName.isNullOrEmpty()) return
-        
-        // Step 1: Close any system overlay (like Assistant)
-        performGlobalAction(GLOBAL_ACTION_BACK)
-        
-        // Step 2: Launch the user's chosen app
-        val intent = packageManager.getLaunchIntentForPackage(packageName)
-        intent?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        try {
-            startActivity(intent)
-        } catch (e: Exception) {
-            currentSignal = "ERROR: Could not launch $packageName"
-        }
-    }
-
     override fun onKeyEvent(event: KeyEvent): Boolean {
         if (event.action == KeyEvent.ACTION_DOWN) {
-            val signal = "HARDWARE_KEY_${event.keyCode}_SCAN_${event.scanCode}"
-            currentSignal = signal
+            val keySignal = "KEY_${event.keyCode}_SCAN_${event.scanCode}"
+            currentSignal = keySignal
             
-            // Check for saved hardware trigger
             val prefs = getSharedPreferences("GODMODE_PREFS", MODE_PRIVATE)
-            if (!isRecording && signal == prefs.getString("user_trigger", null)) {
-                executeUserAction(prefs.getString("user_action", null))
+            if (!isRecording && keySignal == prefs.getString("user_trigger", null)) {
+                checkAndExecute()
             }
         }
         return false
     }
 
-    override fun onAccessibilityEvent(event: AccessibilityEvent) {
-        if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
-            val pkg = event.packageName?.toString() ?: ""
-            // Allow recording of window transitions (like the Motorola UX Core)
-            currentSignal = "WINDOW_CHANGE_$pkg"
+    private fun checkAndExecute() {
+        val now = System.currentTimeMillis()
+        if (now - lastActionTime > 2000) {
+            lastActionTime = now
+            val pkg = getSharedPreferences("GODMODE_PREFS", MODE_PRIVATE).getString("user_action", "")
+            if (!pkg.isNullOrEmpty()) {
+                performGlobalAction(GLOBAL_ACTION_BACK)
+                val intent = packageManager.getLaunchIntentForPackage(pkg)
+                intent?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                try { startActivity(intent) } catch (e: Exception) {}
+            }
         }
     }
 
+    override fun onAccessibilityEvent(event: AccessibilityEvent) {}
     override fun onInterrupt() {}
-
-    override fun onDestroy() {
-        super.onDestroy()
-        logcatThread?.interrupt()
-    }
+    override fun onDestroy() { super.onDestroy(); logcatThread?.interrupt() }
 
     companion object {
         var isRecording = false
-        var currentSignal = "System Ready..."
-        var lastKeyCode = 0   // Put back for compatibility
-        var lastScanCode = 0  // Put back for compatibility
+        var currentSignal = "Ready..."
     }
 }
