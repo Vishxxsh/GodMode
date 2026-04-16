@@ -11,33 +11,57 @@ class ButtonRemapperService : AccessibilityService() {
         if (!isIgniting) return
         val root = rootInActiveWindow ?: return
 
+        // 1. Identify where we are
+        val windowTitle = event.className?.toString() ?: ""
+        
+        // 2. Are we in the main Developer Options list?
         val wirelessNode = findNodeByText(root, "Wireless debugging")
         if (wirelessNode != null) {
-            if (!wirelessNode.isVisibleToUser) {
-                root.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
-            } else {
-                wirelessNode.parent?.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-                wirelessNode.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-            }
+            // Found it! Now click it.
+            clickNode(wirelessNode)
             return
+        } else {
+            // Not found on screen? Scroll the list.
+            scrollDown(root)
         }
 
+        // 3. Are we inside the Wireless Debugging menu?
         val pairNode = findNodeByText(root, "Pair device with pairing code")
         if (pairNode != null) {
-            pairNode.parent?.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-            pairNode.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+            clickNode(pairNode)
             return
         }
 
-        scrapeData(root)
+        // 4. Extract the code if the popup is open
+        scrapePairingData(root)
     }
 
     private fun findNodeByText(root: AccessibilityNodeInfo, text: String): AccessibilityNodeInfo? {
         val nodes = root.findAccessibilityNodeInfosByText(text)
-        return nodes.firstOrNull()
+        return nodes?.firstOrNull { it.isVisibleToUser }
     }
 
-    private fun scrapeData(node: AccessibilityNodeInfo) {
+    private fun clickNode(node: AccessibilityNodeInfo) {
+        var target = node
+        while (target != null && !target.isClickable) {
+            target = target.parent
+        }
+        target?.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+    }
+
+    private fun scrollDown(root: AccessibilityNodeInfo) {
+        // Find any scrollable list on the screen and push it down
+        for (i in 0 until root.childCount) {
+            val child = root.getChild(i) ?: continue
+            if (child.isScrollable) {
+                child.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
+                return
+            }
+            scrollDown(child)
+        }
+    }
+
+    private fun scrapePairingData(node: AccessibilityNodeInfo) {
         for (i in 0 until node.childCount) {
             val child = node.getChild(i) ?: continue
             val txt = child.text?.toString() ?: ""
@@ -50,7 +74,7 @@ class ButtonRemapperService : AccessibilityService() {
                     File("/data/local/tmp/p_port.txt").writeText(port)
                 }
             }
-            scrapeData(child)
+            scrapePairingData(child)
         }
     }
 
@@ -58,6 +82,6 @@ class ButtonRemapperService : AccessibilityService() {
     
     companion object {
         var isIgniting = false
-        var currentSignal = "Ready..." // RESTORED: This fixes the build error
+        var currentSignal = "Ready..."
     }
 }
